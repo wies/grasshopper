@@ -1,5 +1,6 @@
 (** {5 Symbolic state primitives inspired by Viper's Silicon} *)
 
+open Stdlib
 open Util
 open Grass
 open GrassUtil
@@ -9,13 +10,13 @@ open Printf
 
 exception NotYetImplemented of string
 exception HeapChunkNotFound of string 
-let todo str = raise (NotYetImplemented str)
+let todo str = Error str
 exception SymbExecFail of string
-let raise_err str = raise (SymbExecFail str)
+let raise_err str = Error (SymbExecFail str)
 
 (** Verification result type. *)
 (* first indicates a successful verification, the second indicates an error and carries a message. *)
-type result = (form list, string) Either.t 
+type vresult = (form list, string) Result.t 
 
 (** Symbolic values *)
 let mk_fresh_symb_var prefix srt = 
@@ -294,7 +295,7 @@ let mk_and_args args1 args2 =
 (** carry over from Sid's SymbExec *)
 let check_entail prog p1 p2 =
   let snap_axioms = snapshot_axioms prog in
-  if p1 = p2 || p2 = mk_true then None
+  if p1 = p2 || p2 = mk_true then Result.Ok () 
   else (* Dump it to an SMT solver *)
     (** TODO: collect program axioms and add to symbolic state *)
     let p2 = Verifier.annotate_aux_msg "Related location" p2 in
@@ -315,19 +316,19 @@ let check_entail prog p1 p2 =
       sprintf "\n\nCalling prover with name %s\n" name);
     Debug.debug(fun () -> sprintf "FORM Before SMT (%s) \n" (string_of_form f));
     match Prover.get_model ~session_name:name f with
-    | None -> None
-    | Some model -> Some (Verifier.get_err_msg_from_labels model labels, model)
+    | None  -> Result.Ok () 
+    | Some model -> Result.Error (Verifier.get_err_msg_from_labels model labels, model)
 
 (** SMT solver calls *)
 let check pc_stack prog v =
   match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
-  | Some errs -> raise_err "SMT check failed"
-  | None -> ()
+  | Result.Error _ -> raise_err "SMT check failed"
+  | Result.Ok _ -> Result.Ok ()
 
 let check_bool pc_stack prog v =
   match check_entail prog (smk_and (pc_collect_constr pc_stack)) v with
-  | Some errs -> false
-  | None -> true
+  | Result.Error errs -> false
+  | Result.Ok _ -> true
 
 let equal_heap_chunks stack c1 c2 =
   let equal_terms t =
@@ -346,7 +347,7 @@ let rec heap_find_pred_chunk stack h id args =
   | ObjPred(id1, args1, ts1) as p :: h'
     when id = id1 ->
       let ts_conj = mk_and_args args1 args in
-      if (check_bool stack (empty_prog) ts_conj) then
+      if check_bool stack (empty_prog) ts_conj then
         p else heap_find_pred_chunk stack h' id args 
   | p :: h' -> heap_find_pred_chunk stack h' id args 
 
@@ -354,7 +355,7 @@ let heap_remove h stack hchunk =
   List.filter (fun hc ->
     (match hchunk, hc with
       | Obj (id1, fld1, s1), Obj (id2, fld2, s2) ->
-          if id1 = id2 && fld1 = fld2 && (check_bool stack (empty_prog) (mk_eq s1 s2)) then false else true
+          if id1 = id2 && fld1 = fld2 && check_bool stack (empty_prog) (mk_eq s1 s2) then false else true
       | ObjPred (id1, args1, snp1), ObjPred (id2, args2, snp2) -> 
         if id1 = id2 &&
           (check_bool stack (empty_prog) (mk_eq snp1 snp2)) then false else true

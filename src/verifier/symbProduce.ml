@@ -8,35 +8,35 @@ open Grass
 open Printf
 open Util
 
-let produce_symb_form state f snp (fc: symb_state -> 'a option) =
+let produce_symb_form state f snp (fc: symb_state -> vresult) =
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
     (mk_atom Eq [snp; emp_snap])}
   in
   fc s3
 
-let rec produce_symb_forms state fs snp (fc: symb_state -> 'a option) =
+let rec produce_symb_forms state fs snp (fc: symb_state -> vresult) =
   match fs with
   | [] -> fc state
   | hd :: fs' ->
       produce_symb_form state hd snp (fun state' ->
         produce_symb_forms state' fs' snp fc)
 
-let produce_form state (f: Grass.form) snp (fc: symb_state -> 'a option) =
+let produce_form state (f: Grass.form) snp (fc: symb_state -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sProduce Form: %s\n Current State:\n{%s\n}\n\n"
     lineSep (string_of_form f) (string_of_state state));
   eval_form state f (fun state' f' -> 
     produce_symb_form state' f' snp fc)
 
-let rec produce_sl_forms state (fs: Sl.form list) snp (fc: symb_state -> 'a option) =
+let rec produce_sl_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
   match fs with
   | [] -> fc state
   | hd :: fs' ->
       produce_sl_form state hd snp (fun state' ->
         produce_sl_forms state' fs' snp fc)
 
-and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
+and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
    Debug.debug(fun() ->
       sprintf "%sProduce SL Form: %s\n Current State:\n{%s\n}\n\n"
       lineSep (Sl.string_of_form f) (string_of_state state));
@@ -69,14 +69,14 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
       produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
-let rec produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> 'a option) =
+let rec produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
   match fs with
   | [] -> fc state
   | hd :: fs' ->
       produce_sl_symb_form state hd snp (fun state' ->
         produce_sl_symb_forms state' fs' snp fc)
 
-and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
+and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
    Debug.debug(fun() ->
       sprintf "%sProduce SYMB SL Form: %s\n Current State:\n{%s\n}\n\n"
       lineSep (Sl.string_of_form f) (string_of_state state));
@@ -96,31 +96,23 @@ and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> 'a option) =
         produce_sl_symb_forms state fs snp fc
   | _ -> todo "add cases for produce_sl_symb_form"
 
-let produce state sf snp (fc: symb_state -> 'a option) =
+let produce state sf snp (fc: symb_state -> vresult) =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
   | Prog.SL slf -> produce_sl_form state slf snp fc
 
-let produce_symb state sf snp (fc: symb_state -> 'a option) =
+let produce_symb state sf snp (fc: symb_state -> vresult) : vresult =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
   | Prog.SL slf -> produce_sl_symb_form state slf snp fc
-
-let rec produces_symb state (assns: Prog.spec list) snp fc =
-  match assns with
-  | [] -> None 
-  | hd :: assns' -> 
-    (match produce_symb state hd.spec_form snp fc with
-    | Some err -> Some err
-    | None -> produces_symb state assns' snp fc)
 
 (** produce_specs is the entry point for producing an assertion list (spec list),
     this function iterates over the assns calling produce_spec_form on each spec. *)
 let rec produces state (assns: Prog.spec list) snp fc =
   match assns with
-  | [] -> None 
+  | [] -> Result.Ok [] 
   | hd :: assns' -> 
     (match produce state hd.spec_form snp fc with
     (* either type err or value. *) 
-    | Some err -> Some err
-    | None -> produces state assns' snp fc)
+    | Result.Error err as e -> e
+    | Result.Ok _ -> produces state assns' snp fc)

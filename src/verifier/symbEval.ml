@@ -63,7 +63,7 @@ let subst_spec_list_formals state sl pred args =
 
 (** eval_terms evaluates a term list element-wise using the eval
   functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
-let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a option) =
+let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> vresult) =
   let rec eeval state tts ts fc =
     match tts with
     | [] -> fc state (List.rev ts) (* reverse due to the cons op below *)
@@ -73,7 +73,7 @@ let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> 'a opti
   in
   eeval state ts [] fc
 
-and eval_term state t (fc: symb_state -> term -> 'a option) =
+and eval_term state t (fc: symb_state -> term -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval Term: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_term t) (string_of_state state));
@@ -116,7 +116,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
         Debug.debug(fun () -> sprintf "term (%s)\n" (string_of_term tt));
         if srt1 = srt2
         then fc state tt
-        else raise_err (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
+        else Error (sprintf "sorts are not equal (%s) != (%s), this should never happen!"
           (string_of_sort srt1) (string_of_sort srt2))
     | App (IntConst n, ts, Int) as tt ->
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
@@ -147,7 +147,7 @@ and eval_term state t (fc: symb_state -> term -> 'a option) =
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
-and eval_forms state (fs: form list) (fc: symb_state -> form list -> 'a option) =
+and eval_forms state (fs: form list) (fc: symb_state -> form list -> vresult) =
   let rec eeval state ffs symb_fs fc =
     match ffs with
     | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
@@ -157,7 +157,7 @@ and eval_forms state (fs: form list) (fc: symb_state -> form list -> 'a option) 
   in
   eeval state fs [] fc
 
-and eval_form_2 state f (fc: symb_state -> form -> 'a option) =
+and eval_form_2 state f (fc: symb_state -> form -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_form f) (string_of_state state));
@@ -176,7 +176,7 @@ and eval_form_2 state f (fc: symb_state -> form -> 'a option) =
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
 
 
-and eval_form state f (fc: symb_state -> form -> 'a option) =
+and eval_form state f (fc: symb_state -> form -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_form f) (string_of_state state));
@@ -210,18 +210,18 @@ and consumes state (assns: Prog.spec list) fc =
 and consumes_symb state (assns: Prog.spec list) fc =
   consumes_symb_impl state assns eval_form eval_terms eval_term fc
 
-and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> 'a option) =
+and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> vresult) =
   consume_sl_form_impl state heap f eval_form eval_terms eval_term fc
 
-and consumes_sl_form state heap (fs: Sl.form list) (fc: symb_state -> symb_heap -> term -> 'a option) =
+and consumes_sl_form state heap (fs: Sl.form list) (fc: symb_state -> symb_heap -> term -> vresult) =
   consumes_sl_form_impl state heap fs eval_form eval_terms eval_term fc
 
-and consume_form state heap (f: Grass.form) (fc: symb_state -> symb_heap -> term -> 'a option) = 
+and consume_form state heap (f: Grass.form) (fc: symb_state -> symb_heap -> term -> vresult) = 
   consume_form_impl state heap f eval_form fc
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
-let rec eval_sl_forms state (fs: Sl.form list) (fc: symb_state -> Sl.form list -> 'a option) =
+let rec eval_sl_forms state (fs: Sl.form list) (fc: symb_state -> Sl.form list -> vresult) =
   let rec eeval state ffs symb_fs fc =
     match ffs with
     | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
@@ -231,7 +231,7 @@ let rec eval_sl_forms state (fs: Sl.form list) (fc: symb_state -> Sl.form list -
   in
   eeval state fs [] fc
 
-and eval_sl_form state f (fc: symb_state -> Sl.form -> 'a option) =
+and eval_sl_form state f (fc: symb_state -> Sl.form -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval SL Form: %s\n State:\n{%s\n}\n\n"
     lineSep (Sl.string_of_form f) (string_of_state state));
@@ -251,15 +251,7 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> 'a option) =
       fc state' (Sl.BoolOp (op, slfs', pos)))
   | Sl.Binder (b, ids, slf, pos) -> todo "sl binder eval"
 
-let eval_spec_form state sf (fc: symb_state -> form -> 'a option) =
+let eval_spec_form state sf (fc: symb_state -> form -> vresult) =
   match sf with
   | Prog.FOL fol -> eval_form state fol fc
   | Prog.SL slf -> failwith "cannot call eval_spec_form on an sl formula"
-
-let rec eval_spec_list state (assns: Prog.spec list) fc =
-  match assns with
-  | [] -> None 
-  | hd :: assns' -> 
-    (match eval_spec_form state hd.spec_form fc with
-    | Some err -> Some err
-    | None -> eval_spec_list state assns' fc)

@@ -6,7 +6,7 @@ open GrassUtil
 open Grass
 open Prog 
 
-let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap -> term -> 'a option) =
+let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap -> term -> vresult) =
   let fset =
     List.fold_left (fun acc f ->
       GrassUtil.FormSet.add f acc)
@@ -17,14 +17,14 @@ let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap ->
 
 (* Consume pure [f] this is heap independent so we pass a Unit snap to fc
  * TODO consume SL.form list*)
-let rec consumes_pure_impl state heap fs f_eval_forms (fc: symb_state -> symb_heap -> term -> 'a option) =
+let rec consumes_pure_impl state heap fs f_eval_forms (fc: symb_state -> symb_heap -> term -> vresult) =
   f_eval_forms state fs (fun state' fs' -> check_symb_forms state' heap fs' fc)
 
-let rec consume_form_impl state heap (f: Grass.form) f_eval_form (fc: symb_state -> symb_heap -> term -> 'a option) =
+let rec consume_form_impl state heap (f: Grass.form) f_eval_form (fc: symb_state -> symb_heap -> term -> vresult) =
   f_eval_form state f (fun state' f' -> 
     check_symb_forms state' heap [f'] fc)
 
-let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sConsume SL Symb Form: %s\n State:\n{%s\n}\n\n"
     lineSep (Sl.string_of_form f) (string_of_state state));
@@ -73,7 +73,7 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
 
-let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sConsume SL Form: %s\n State:\n{%s\n}\n\n"
     lineSep (Sl.string_of_form f) (string_of_state state));
@@ -114,17 +114,17 @@ let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
 
-let consume_impl state heap (sf: Prog.spec_form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+let consume_impl state heap (sf: Prog.spec_form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> vresult) =
   match sf with
   | Prog.FOL fol -> consume_form_impl state heap fol f_eval_form fc
   | Prog.SL slf -> consume_sl_form_impl state heap slf f_eval_form f_eval_terms f_eval_term fc
 
-let consume_symb_impl state heap (sf: Prog.spec_form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+let consume_symb_impl state heap (sf: Prog.spec_form) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> vresult) =
   match sf with
   | Prog.FOL fol -> consume_form_impl state heap fol f_eval_form fc
   | Prog.SL slf -> consume_sl_symb_form_impl state heap slf f_eval_form f_eval_terms f_eval_term fc
 
-let rec consumes_sf_impl state heap (sf: Prog.spec_form list) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> 'a option) =
+let rec consumes_sf_impl state heap (sf: Prog.spec_form list) f_eval_form f_eval_terms f_eval_term (fc: symb_state -> symb_heap -> term -> vresult) =
   match sf with
   | [] -> fc state heap (emp_snap)
   | hd :: sfs' -> 

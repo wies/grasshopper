@@ -1,5 +1,6 @@
 (** {5 Symbolic execution inspired by Viper's Silicon} *)
 
+open Stdlib
 open Printf
 open Util 
 open GrassUtil
@@ -107,7 +108,7 @@ let loop_target_terms state comm =
     | None -> ts)
   [] (IdSet.elements loop_modified)
 
-let rec exec state comm (fc: symb_state -> 'a option) =
+let rec exec state comm (fc: symb_state -> vresult) =
   Debug.debug(fun () -> sprintf "NO PROG\n");
   match comm with
   | Basic (Assign {assign_lhs=[field];
@@ -271,15 +272,15 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         let test_inv_form = 
             mk_sep_star invar (mk_pure l.loop_test)
           in
-          produce_sl_form state2 test_inv_form (fresh_snap_tree ()) (fun state3 ->
+          Result.Ok (Opt.get (Result.to_option (produce_sl_form state2 test_inv_form (fresh_snap_tree ()) (fun state3 ->
             exec state3 l.loop_postbody (fun state4 ->
-              consume_sl_form state4 state.heap invar (fun _ _ _ -> None)))
+              consume_sl_form state4 state.heap invar (fun _ _ _ -> Result.Ok []))))
           |> Opt.lazy_or_else (fun () ->
-            consume_sl_form state state.heap invar (fun state1' h s ->
+            Result.to_option (consume_sl_form state state.heap invar (fun state1' h s ->
               let state2' = {state1' with store=new_gamma} in
               exec state2' l.loop_prebody (fun state3' ->
                 let slf = mk_sep_star invar (mk_pure (GrassUtil.mk_not l.loop_test)) in
-                produce_sl_form state2' slf (fresh_snap_tree ()) fc))))
+                produce_sl_form state2' slf (fresh_snap_tree ()) fc)))))))
   | Basic (Unfold pc, pp) -> 
     Debug.debug (fun () -> 
         sprintf "%sExecuting unfold: %d: %s%sCurrent state:\n%s\n"
@@ -345,7 +346,7 @@ let rec exec state comm (fc: symb_state -> 'a option) =
         fc state'
     )
 
-and execs state comms (fc: symb_state -> 'a option) =
+and execs state comms (fc: symb_state -> vresult) =
   match comms with
   | [] -> fc state
   | comm :: comms' ->
@@ -374,7 +375,7 @@ let verify_pred spl_prog prog aux_axioms pred =
     (havoc empty_store formal_terms) prog pred.pred_contract in
 
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
-  let _ = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> None) in
+  let _ = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> Result.Ok []) in
 
   aux_axioms, []
  
@@ -427,7 +428,7 @@ let verify_function spl_prog prog aux_axioms func =
           let _ = fun_axiom name formal_terms (sort_of return_term) st3' in
           (* instea of let aux_axioms = fa :: aux_axioms in *)
           (* we can use an either type and return an error if the continuation fails, or the axioms.*)
-          None
+          Result.Ok [] 
     )))
   in
 
@@ -485,8 +486,8 @@ let verify spl_prog prog aux_axioms proc =
            | Some body ->
               Debug.debug (fun () -> "EXEC BODY\n");
               exec st body (fun st3 ->
-                consumes st3 postcond (fun _ _ -> None))
-           | None -> None)
+                consumes st3 postcond (fun _ _ -> Result.Ok []))
+           | None -> Result.Ok [])
       ))
   in 
   aux_axioms, []
