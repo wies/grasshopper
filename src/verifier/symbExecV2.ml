@@ -124,7 +124,7 @@ let rec exec state comm (fc: symb_state -> vresult) =
       let f = mk_sep_star (mk_field_region t1 map) (mk_pure (GrassUtil.mk_eq r t2)) in
       Debug.debug(fun() -> sprintf "CONSUME CONTINUE heap %s\n" (string_of_heap h));
       let state3 = {state2' with heap=h} in
-      produce_sl_form state3 f snp fc) 
+      produce_sl_form state3 f (fresh_snap_tree ()) fc) 
   | Basic (Assign {assign_lhs=ids; assign_rhs=ts}, pp) ->
     Debug.debug (fun () -> 
       sprintf "%sExecuting Assign: %d: %s%sCurrent state:\n%s\n"
@@ -243,7 +243,8 @@ let rec exec state comm (fc: symb_state -> vresult) =
       | Map ([Loc l], field_sort) when l = loc_srt ->
           mk_field_region tnew (mk_free_app field_sort v.var_name []) :: regions 
       | _ -> regions) state.prog.prog_vars [] in
-    produce_sl_forms st2 field_regions (fresh_snap_tree ()) fc 
+    let snaps = List.map (fun _ -> (fresh_snap_tree ())) field_regions in
+    produce_sl_forms st2 field_regions snaps fc 
   | Basic (Dispose d, pp) -> 
       Debug.debug (fun () ->
         sprintf "%sExecuting Dispose: %d: %s%sCurrent state:\n%s\n"
@@ -425,7 +426,7 @@ let verify_function spl_prog prog aux_axioms func =
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
           (* fun_axiom can use mk_sequent to build the right axiom. *)
-          let axioms = fun_axiom name formal_terms (sort_of return_term) st3' in
+          let axioms = fun_axiom name formal_terms (sort_of return_term) (spec_forms_to_forms precond) st3' in
           (* instea of let aux_axioms = fa :: aux_axioms in *)
           (* we can use an either type and return an error if the continuation fails, or the axioms.*)
           Debug.debug (fun () -> sprintf "VERIFY FUNCTION axiom (%s)\n" (string_of_form axioms));
@@ -434,9 +435,7 @@ let verify_function spl_prog prog aux_axioms func =
          * forall x, y, z :: precond |-> f() = body try mk_sequent *)
         let prog' = {st3'.prog with prog_axioms = sfs @ st3'.prog.prog_axioms} in
         let _ = print_prog stdout prog' in
-        (*let state' = {state with prog = prog'} in *) 
-
-          Result.Ok [axioms] 
+        Result.Ok [axioms] 
     )))
   in
   match result with

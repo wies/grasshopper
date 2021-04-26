@@ -308,7 +308,6 @@ let spec_forms_to_forms =
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 (** carry over from Sid's SymbExec *)
 let check_entail prog p1 p2 =
-  let _ = print_prog stdout prog in
   let snap_axioms = snapshot_axioms prog in
   let fun_axioms = spec_forms_to_forms prog.prog_axioms in
   let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) fun_axioms in

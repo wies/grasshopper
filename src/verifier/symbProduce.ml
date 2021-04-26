@@ -29,12 +29,12 @@ let produce_form state (f: Grass.form) snp (fc: symb_state -> vresult) =
   eval_form state f (fun state' f' -> 
     produce_symb_form state' f' snp fc)
 
-let rec produce_sl_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
-  match fs with
-  | [] -> fc state
-  | hd :: fs' ->
-      produce_sl_form state hd snp (fun state' ->
-        produce_sl_forms state' fs' snp fc)
+let rec produce_sl_forms state (fs: Sl.form list) snps (fc: symb_state -> vresult) =
+  match fs, snps with
+  | [], [] -> fc state
+  | hd :: fs', s :: snps' ->
+      produce_sl_form state hd s (fun state' ->
+        produce_sl_forms state' fs' snps' fc)
 
 and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
    Debug.debug(fun() ->
@@ -64,7 +64,8 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
      produce_sl_form state f1 (snap_first snp) (fun state' ->
        produce_sl_form state' f2 (snap_second snp) fc)
   | Sl.BoolOp (op, fs, p) ->
-        produce_sl_forms state fs snp fc
+        let snaps = List.map (fun _ -> (fresh_snap_tree ())) fs in
+        produce_sl_forms state fs snaps fc
   | Sl.Binder (b, [], f, _) ->
       produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"

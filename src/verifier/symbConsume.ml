@@ -84,10 +84,11 @@ let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_
    Debug.debug(fun () -> "Pure\n");
    consume_form_impl state heap p f_eval_form fc 
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
-  | Sl.Atom (Sl.Region, [r], _) -> 
-      f_eval_term state r (fun state' t' ->
-        let (chunk, h') = heap_remove_by_term state.pc state.heap t' in
-        fc state h' (emp_snap))
+  | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], _) -> 
+      f_eval_term state obj (fun state' t' ->
+        let chunk = heap_find_by_field_id state.pc state.heap state.prog t' id in
+        let h' = heap_remove state.heap state.pc chunk in
+        fc state h' (get_heap_chunk_snap chunk))
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
   | Sl.Atom (Sl.Pred id, ts, _) -> 
      f_eval_terms state ts (fun state' ts' ->
