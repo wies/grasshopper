@@ -12,10 +12,11 @@ exception NotYetImplemented of string
 exception HeapChunkNotFound of string 
 let todo str = Error str
 exception SymbExecFail of string
-let raise_err str = Error (SymbExecFail str)
+let raise_err str = Error str
 
 (** Verification result type. *)
 (* first indicates a successful verification, the second indicates an error and carries a message. *)
+(* try passing the state in ok *)
 type vresult = (form list, string) Result.t 
 
 (** Symbolic values *)
@@ -291,10 +292,26 @@ let mk_and_args args1 args2 =
   |> List.map (fun (t1, t2) -> mk_eq t1 t2)
   |> smk_and
 
+let spec_forms_to_forms =
+  Util.flat_map 
+    (fun sf -> 
+      let name = 
+        Printf.sprintf "%s_%d_%d" 
+          sf.spec_name sf.spec_pos.sp_start_line sf.spec_pos.sp_start_col
+      in
+      match sf.spec_form with
+      | FOL f ->
+          let f1 = f |> mk_name name in
+          [f1]
+      | SL _ -> [])
+
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 (** carry over from Sid's SymbExec *)
 let check_entail prog p1 p2 =
+  let _ = print_prog stdout prog in
   let snap_axioms = snapshot_axioms prog in
+  let fun_axioms = spec_forms_to_forms prog.prog_axioms in
+  let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) fun_axioms in
   if p1 = p2 || p2 = mk_true then Result.Ok () 
   else (* Dump it to an SMT solver *)
     (** TODO: collect program axioms and add to symbolic state *)
@@ -307,7 +324,7 @@ let check_entail prog p1 p2 =
       (* Add definitions of all referenced predicates and functions *)
       |> fun f -> f :: Verifier.pred_axioms prog2 
       (** TODO: Add axioms *)
-      |> (fun fs -> smk_and (fs @ snap_axioms))
+      |> (fun fs -> smk_and (fs @ snap_axioms @ fun_axioms))
       (* Add labels *)
       |> Verifier.add_labels
     in
@@ -317,12 +334,14 @@ let check_entail prog p1 p2 =
     Debug.debug(fun () -> sprintf "FORM Before SMT (%s) \n" (string_of_form f));
     match Prover.get_model ~session_name:name f with
     | None  -> Result.Ok () 
-    | Some model -> Result.Error (Verifier.get_err_msg_from_labels model labels, model)
+    | Some model ->
+        Debug.debug (fun () -> sprintf "FAIL\n");
+        Result.Error (Verifier.get_err_msg_from_labels model labels, model)
 
 (** SMT solver calls *)
 let check pc_stack prog v =
   match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
-  | Result.Error _ -> raise_err "SMT check failed"
+  | Result.Error err  as e -> raise_err "SMT check failed"
   | Result.Ok _ -> Result.Ok ()
 
 let check_bool pc_stack prog v =

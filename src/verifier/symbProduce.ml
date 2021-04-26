@@ -108,11 +108,7 @@ let produce_symb state sf snp (fc: symb_state -> vresult) : vresult =
 
 (** produce_specs is the entry point for producing an assertion list (spec list),
     this function iterates over the assns calling produce_spec_form on each spec. *)
-let rec produces state (assns: Prog.spec list) snp fc =
+let rec produces state (assns: Prog.spec list) snp fc : vresult =
   match assns with
-  | [] -> Result.Ok [] 
-  | hd :: assns' -> 
-    (match produce state hd.spec_form snp fc with
-    (* either type err or value. *) 
-    | Result.Error err as e -> e
-    | Result.Ok _ -> produces state assns' snp fc)
+  | [] -> fc state
+  | hd :: assns' -> produce state hd.spec_form snp (fun state' -> produces state' assns' snp fc) 

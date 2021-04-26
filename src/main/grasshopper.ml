@@ -4,6 +4,8 @@ open Util
 open Printf
 open SplCompiler
 open Grass
+open GrassUtil
+open Prog 
     
 let greeting =
   "GRASShopper version " ^ Config.version ^ "\n"
@@ -158,8 +160,20 @@ let check_predicate spl_prog pred =
   in
 
   let check simple_prog (aux_axioms, first) pred =
-    let aux_axioms, first = check_pred aux_axioms pred in
-    aux_axioms, true 
+    let aux_axioms, errors = check_pred aux_axioms pred in
+    aux_axioms, List.fold_left
+      (fun first (pp, error_msg, model) ->
+        let _ =
+          if !Config.robust || !Config.model_repl
+          then ((if not first then print_newline ()); ProgError.print_error pp error_msg);
+          if !Config.model_repl then ModelRepl.repl model;
+          if not !Config.robust
+          then ProgError.error pp error_msg
+          else ()
+        in
+        false
+      )
+      first errors
   in
   List.fold_left (check prog) ([], true) (preds)
 
@@ -211,15 +225,30 @@ let check_function spl_prog func =
   in
 
   let check simple_prog (aux_axioms, first) func =
-    let aux_axioms, first = check_func aux_axioms func in
-    let _ = List.iter (fun f -> Printf.printf "axioms (%s)\n" (string_of_form f))    aux_axioms in
-    aux_axioms, true 
+    let aux_axioms, errors = check_func aux_axioms func in
+    aux_axioms, List.fold_left
+      (fun first (pp, error_msg, model) ->
+        let _ =
+          if !Config.robust || !Config.model_repl
+          then ((if not first then print_newline ()); ProgError.print_error pp error_msg);
+          if !Config.model_repl then ModelRepl.repl model;
+          if not !Config.robust
+          then ProgError.error pp error_msg
+          else ()
+        in
+        false
+      )
+      first errors
   in
   List.fold_left (check prog) ([], true) (functions)
  
 (** Check SPL program in main file [file] and procedure [proc] *)
-let check_spl_program spl_prog proc =
+let check_spl_program spl_prog proc axioms =
+
+  let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) axioms in 
   let prog = SplTranslator.to_program spl_prog in
+  let prog = {prog with prog_axioms = sfs @ prog.prog_axioms} in
+
   let procs =  (* Split proc string to get names of multiple procedures *)
     match proc with
     | Some p ->
@@ -262,7 +291,7 @@ let check_spl_program spl_prog proc =
     let aux_axioms, errors = check_proc aux_axioms proc in
     aux_axioms, List.fold_left
       (fun first (pp, error_msg, model) ->
-        if not !Config.symbexec then output_trace simple_prog proc (pp, model);
+        if not (!Config.symbexec || !Config.symbexec_v2) then output_trace simple_prog proc (pp, model);
         let _ =
           if !Config.robust || !Config.model_repl
           then ((if not first then print_newline ()); ProgError.print_error pp error_msg);
@@ -356,8 +385,8 @@ let _ =
         SplSyntax.print_cu stdout spl_prog
       else begin
         let _ = check_predicate spl_prog !Config.predicate in
-        let _ = check_function spl_prog !Config.func in
-        let _, res = check_spl_program spl_prog !Config.procedure in
+        let axioms, _ = check_function spl_prog !Config.func in
+        let _, res = check_spl_program spl_prog !Config.procedure axioms in
         print_stats start_time; 
         print_c_program spl_prog;
         if !Config.verify && res then

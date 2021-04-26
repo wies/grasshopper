@@ -12,8 +12,10 @@ let check_symb_forms (state: symb_state) heap fs (fc: symb_state -> symb_heap ->
       GrassUtil.FormSet.add f acc)
     GrassUtil.FormSet.empty fs
   in
-  let _ = check state.pc state.prog (GrassUtil.smk_and (GrassUtil.FormSet.elements fset)) in
-  fc state heap (emp_snap) 
+  let result = check state.pc state.prog (GrassUtil.smk_and (GrassUtil.FormSet.elements fset)) in
+  match result with
+  | Result.Error err as e -> e  
+  | Result.Ok _ -> fc state heap (emp_snap) 
 
 (* Consume pure [f] this is heap independent so we pass a Unit snap to fc
  * TODO consume SL.form list*)

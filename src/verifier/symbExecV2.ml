@@ -12,6 +12,7 @@ open SymbFunc
 open SymbConsume
 open SymbProduce
 open SymbBranch
+open Model
 open Prog
 
 (* todo filter out predicates in the program so we don't hit that problem. *)
@@ -294,14 +295,6 @@ let rec exec state comm (fc: symb_state -> vresult) =
       | Some b ->
         Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
-        (*
-        let _ = IdMap.iter (fun k v -> 
-          Debug.debug (fun () -> sprintf "k, v = %s, %s, %s\n" (string_of_ident k) (string_of_ident v.var_name) (string_of_sort v.var_sort))) locals in
-        let _ = IdSet.iter (fun v -> 
-          Debug.debug (fun () -> sprintf "v = %s\n" (string_of_ident v))) locals in
-
-        *)
-
         Debug.debug (fun () -> sprintf "ids (%s)\n" (string_of_ident_list ids));
         Debug.debug (fun () -> sprintf "terms (%s)\n" (string_of_term_list args'));
         let sm =
@@ -343,8 +336,7 @@ let rec exec state comm (fc: symb_state -> vresult) =
           produce_sl_form state2 (SlUtil.mk_pred pc.pred_name pc.pred_args) snap (fun state3 -> fc state3))
       | None ->
         Debug.debug (fun () -> sprintf "no body\n");
-        fc state'
-    )
+        fc state')
 
 and execs state comms (fc: symb_state -> vresult) =
   match comms with
@@ -375,9 +367,16 @@ let verify_pred spl_prog prog aux_axioms pred =
     (havoc empty_store formal_terms) prog pred.pred_contract in
 
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
-  let _ = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> Result.Ok []) in
+  let result = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> Result.Ok []) in
+  match result with
+  | Result.Error err -> 
+      Debug.debug (fun () -> sprintf "err (%s)\n" (err));
+      aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
+  | Result.Ok axioms -> 
+      Debug.debug (fun () -> sprintf "VERIFY pred\n");
+      let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
+      axioms @ aux_axioms, []
 
-  aux_axioms, []
  
 let verify_function spl_prog prog aux_axioms func =
   (* again functions are represented as predicates with a single return value *)
@@ -421,19 +420,33 @@ let verify_function spl_prog prog aux_axioms func =
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
 
   (* change this to be an either type *)
-  let _ = produces init_state precond (fresh_snap_tree ()) (fun st ->
+  let result = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
-          let _ = fun_axiom name formal_terms (sort_of return_term) st3' in
+          (* fun_axiom can use mk_sequent to build the right axiom. *)
+          let axioms = fun_axiom name formal_terms (sort_of return_term) st3' in
           (* instea of let aux_axioms = fa :: aux_axioms in *)
           (* we can use an either type and return an error if the continuation fails, or the axioms.*)
-          Result.Ok [] 
+          Debug.debug (fun () -> sprintf "VERIFY FUNCTION axiom (%s)\n" (string_of_form axioms));
+        let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) [axioms] in 
+        (* need to put the formulas from the precondition on the stack and the formula we need is
+         * forall x, y, z :: precond |-> f() = body try mk_sequent *)
+        let prog' = {st3'.prog with prog_axioms = sfs @ st3'.prog.prog_axioms} in
+        let _ = print_prog stdout prog' in
+        (*let state' = {state with prog = prog'} in *) 
+
+          Result.Ok [axioms] 
     )))
   in
-
-  aux_axioms, []
-
+  match result with
+  | Result.Error err -> 
+      Debug.debug (fun () -> sprintf "err (%s)\n" (err));
+      aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
+  | Result.Ok axioms -> 
+      Debug.debug (fun () -> sprintf "VERIFY FUNCTION \n");
+      let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
+      axioms @ aux_axioms, []
 
 (** verify checks procedures are well-formed specs and the postcondition can be met by executing the body under the precondition *)
 let verify spl_prog prog aux_axioms proc = 
@@ -478,7 +491,7 @@ let verify spl_prog prog aux_axioms proc =
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
-  let _ = produces init_state precond (fresh_snap_tree ())
+  let result = produces init_state precond (fresh_snap_tree ())
     (fun st ->
       let st2 = { st with heap=[]; old_store=st.store } in
       produces st2 postcond (fresh_snap_tree ()) (fun _ ->
@@ -490,4 +503,9 @@ let verify spl_prog prog aux_axioms proc =
            | None -> Result.Ok [])
       ))
   in 
-  aux_axioms, []
+  match result with
+  | Result.Error err -> 
+      Debug.debug (fun () -> sprintf "err (%s)\n" (err));
+      aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
+  | Result.Ok _ -> 
+      aux_axioms, []

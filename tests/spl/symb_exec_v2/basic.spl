@@ -9,7 +9,7 @@ procedure assign(x: Int, y: Int)
 
 procedure assign2(x: Int, y: Int) 
   requires x == 10 && y == 5 
-  ensures x == 10 && y == 5
+  ensures x == 10 && y == 5 
 {
   x := 10;
   y := 5;
