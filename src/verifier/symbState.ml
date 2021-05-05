@@ -210,7 +210,7 @@ let snap_pair s1 s2 =
   App (Constructor tree_id, [s1; s2], snap_typ) 
 
 let fresh_snap_tree () =
-  mk_free_const snap_typ (fresh_ident "fresh_snap")
+  mk_var snap_typ (fresh_ident "fresh_snap")
 
 let fresh_snap =
   App (Destructor tree_id, [snap_first (emp_snap); snap_second (emp_snap)], snap_typ)
