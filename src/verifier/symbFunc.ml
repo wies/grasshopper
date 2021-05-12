@@ -80,7 +80,8 @@ let fun_axiom name args srt precond state =
   let _ = IdMap.iter (fun k v -> Printf.printf "*** AXIOM SM k, v (%s, %s)\n" (string_of_ident k) (string_of_term v)) sm in
 
   (* build the axiom *)
-  let lhs = mk_free_fun rhs_srt name (List.rev args @ rhs_vars) in  
+  let lhs_vars = List.map (fun (id, srt) -> Var(id, srt)) bounds in
+  let lhs = mk_free_fun rhs_srt name (List.rev lhs_vars) in  
   Debug.debug(fun () -> sprintf "LHS (%s)\n" (string_of_term lhs));
   let pred = (mk_sequent precond [subst_ret_val rhs lhs]) in
   Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
