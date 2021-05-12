@@ -227,6 +227,26 @@ let convert cu =
         let tidx = convert_term locals idx in
         let tupd = convert_term locals upd in
         GrassUtil.mk_write tmap [tidx] tupd
+    | Ite (BinaryOp (e1, (OpAnd as op), e2, ty, _), e3, e4, pos) 
+    | Ite (BinaryOp (e1, (OpOr as op), e2, ty, _), e3, e4, pos) ->
+        let elem_ty =  convert_type ty pos in
+        let mk_app =
+          match op with
+          | OpAnd -> (fun t1 t2 -> GrassUtil.mk_app elem_ty Grass.AndTerm [t1; t2])
+          | OpOr -> (fun t1 t2 -> GrassUtil.mk_app elem_ty Grass.OrTerm [t1; t2])
+          | _ -> failwith "unexpected operator"
+        in
+        let tcond1 = convert_term locals e1 in
+        let tcond2 = convert_term locals e2 in
+        let t1 = mk_app tcond1 tcond2 in
+        let t2 = convert_term locals e3 in
+        let t3 = convert_term locals e4 in
+        GrassUtil.mk_ite t1 t2 t3
+    | Ite (cond, e1, e2, pos) ->
+        let t1 = convert_term locals cond in
+        let t2 = convert_term locals e1 in
+        let t3 = convert_term locals e2 in
+        GrassUtil.mk_ite t1 t2 t3
     | ConstrApp (id, es, pos) ->
         let decl = IdMap.find id cu.fun_decls in
         let ts = List.map (convert_term locals) es in
@@ -330,6 +350,7 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
+    | BinaryOp (e1, (OpEq as op), e2, ty, pos)
     | BinaryOp (e1, (OpGt as op), e2, ty, pos)
     | BinaryOp (e1, (OpLt as op), e2, ty, pos)
     | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
@@ -338,6 +359,7 @@ let convert cu =
           match op with
           | OpGt -> GrassUtil.mk_gt_term
           | OpLt -> GrassUtil.mk_lt_term
+          | OpEq -> GrassUtil.mk_eq_term
           | OpGeq -> GrassUtil.mk_geq_term
           | OpLeq -> GrassUtil.mk_leq_term
           | _ -> failwith "unexpected operator"

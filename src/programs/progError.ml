@@ -21,7 +21,9 @@ let lexical_error pos = raise (Prog_error (pos, "Lexical Error"))
 let syntax_error pos msg_opt = 
   match msg_opt with 
   | Some msg -> raise (Prog_error (pos, "Syntax Error: " ^ msg))
-  | None -> raise (Prog_error (pos, "Syntax Error"))
+  | None -> 
+      Printexc.print_backtrace stdout;
+      raise (Prog_error (pos, "Syntax Error"))
 
 let type_error pos msg = raise (Prog_error (pos, "Type Error: " ^ msg))
 
