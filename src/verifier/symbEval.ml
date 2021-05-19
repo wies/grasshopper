@@ -38,7 +38,6 @@ let pr_sspec_form_list sfl =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-
 (* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
 let subst_spec_list subst_map sl =
   List.map (fun s -> subst_spec_form subst_map s.spec_form) sl
@@ -50,7 +49,9 @@ let fold_spec_list f acc specs =
     | FOL f -> mk_sep_star facc (mk_pure f))
     acc (List.map (fun s -> s.spec_form) specs)
   in
-  [{(List.hd (List.rev specs)) with spec_form=SL folded}]
+  match specs with 
+  | [] -> []
+  | _ -> [{(List.hd (List.rev specs)) with spec_form=SL folded}]
 
 let subst_spec_list_formals state sl pred args =
   let sm = 
@@ -143,6 +144,11 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
      eval_terms state2 ts (fun state2' ts' ->
        fc state2' (mk_f_snap srt (App (Old, ts', srt))))
   | App (BoolConst b, ts, srt) as f -> fc state f
+  | App (Ite, [cond; e1; e2], srt) ->
+      eval_term state cond (fun state2 cond' ->
+        eval_term state2 e1 (fun state3 e1' ->
+          eval_term state3 e2 (fun state4 e2' ->
+            fc state4 (GrassUtil.mk_ite cond' e1' e2'))))
   | App (symb, ts, srt) -> todo "eval_term catch all"
 
 (** eval_forms evaluates a formula list fs element-wise using the eval

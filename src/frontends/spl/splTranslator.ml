@@ -3,6 +3,7 @@
 
 open Util 
 open Prog
+open Printf
 open Sl
 open Grass
 open SplSyntax
@@ -227,8 +228,8 @@ let convert cu =
         let tidx = convert_term locals idx in
         let tupd = convert_term locals upd in
         GrassUtil.mk_write tmap [tidx] tupd
-    | Ite (BinaryOp (e1, (OpAnd as op), e2, ty, _), e3, e4, pos) 
-    | Ite (BinaryOp (e1, (OpOr as op), e2, ty, _), e3, e4, pos) ->
+    | BinaryOp (e1, (OpAnd as op), e2, ty, pos)
+    | BinaryOp (e1, (OpOr as op), e2, ty, pos) ->
         let elem_ty =  convert_type ty pos in
         let mk_app =
           match op with
@@ -238,14 +239,11 @@ let convert cu =
         in
         let tcond1 = convert_term locals e1 in
         let tcond2 = convert_term locals e2 in
-        let t1 = mk_app tcond1 tcond2 in
-        let t2 = convert_term locals e3 in
-        let t3 = convert_term locals e4 in
-        GrassUtil.mk_ite t1 t2 t3
-    | Ite (cond, e1, e2, pos) ->
-        let t1 = convert_term locals cond in
-        let t2 = convert_term locals e1 in
-        let t3 = convert_term locals e2 in
+        mk_app tcond1 tcond2
+    | Ite (e1, e2, e3, pos) ->
+        let t1 = convert_term locals e1 in
+        let t2 = convert_term locals e2 in
+        let t3 = convert_term locals e3 in
         GrassUtil.mk_ite t1 t2 t3
     | ConstrApp (id, es, pos) ->
         let decl = IdMap.find id cu.fun_decls in
@@ -350,7 +348,10 @@ let convert cu =
         let t1 = convert_term locals e1 in
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
-    | BinaryOp (e1, (OpEq as op), e2, ty, pos)
+    | BinaryOp (e1, OpEq, e2, ty, pos) ->
+      let t1 = convert_term locals e1 in
+      let t2 = convert_term locals e2 in
+      GrassUtil.mk_eq_term t1 t2
     | BinaryOp (e1, (OpGt as op), e2, ty, pos)
     | BinaryOp (e1, (OpLt as op), e2, ty, pos)
     | BinaryOp (e1, (OpGeq as op), e2, ty, pos)
@@ -359,7 +360,6 @@ let convert cu =
           match op with
           | OpGt -> GrassUtil.mk_gt_term
           | OpLt -> GrassUtil.mk_lt_term
-          | OpEq -> GrassUtil.mk_eq_term
           | OpGeq -> GrassUtil.mk_geq_term
           | OpLeq -> GrassUtil.mk_leq_term
           | _ -> failwith "unexpected operator"
@@ -471,6 +471,7 @@ let convert cu =
             let f2 = convert_grass_form locals e2 in
             GrassUtil.mk_srcpos pos (GrassUtil.mk_iff f1 f2)
         | _ ->
+            (* catch all case *)
             let t1 = convert_term locals e1 in
             let t2 = convert_term locals e2 in
             GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
