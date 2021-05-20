@@ -12,7 +12,7 @@ last_heading = ""
 
 def print_counts(spec_count, prog_count):
     #print last_heading
-    print spec_count, "\t", prog_count, "\t", prog_count + spec_count
+    print(spec_count, "\t", prog_count, "\t", prog_count + spec_count)
     
 
 def count(fname):
