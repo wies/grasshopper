@@ -777,7 +777,7 @@ let is_interpreted solver_info sym = match sym with
   | Empty | SetEnum | Union | Inter | Diff | Elem | SubsetEq | Disjoint ->
       !Config.use_set_theory && solver_info.has_set_theory
   | Eq | Gt | Lt | GtEq | LtEq | IntConst _ | BoolConst _
-  | Plus | Minus | Mult | Div | Mod | UMinus 
+  | Plus | Minus | Mult | Div | Mod | UMinus | Ite
   | BitNot | BitAnd | BitOr | ShiftLeft | ShiftRight
   | Constructor _ | Destructor _
   | IntToByte | ByteToInt -> true
