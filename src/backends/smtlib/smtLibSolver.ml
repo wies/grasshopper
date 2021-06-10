@@ -682,6 +682,7 @@ let smtlib_symbol_of_grass_symbol_no_bv solver_info sym = match sym with
   | GtEq -> SmtLibSyntax.Geq
   | Lt -> SmtLibSyntax.Lt
   | Gt -> SmtLibSyntax.Gt
+  | Ite -> SmtLibSyntax.Ite
   | Constructor id | Destructor id -> SmtLibSyntax.Ident id
   | BitAnd -> failwith "bitwise and requires bitvector theory."
   | BitOr -> failwith "bitwise or requires bitvector theory."
