@@ -6,6 +6,7 @@ open GrassUtil
 open Grass
 open Prog
 open SymbState
+open SymbBranch
 open SymbConsume
 open SlUtil 
 
@@ -145,10 +146,27 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
        fc state2' (mk_f_snap srt (App (Old, ts', srt))))
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (Ite, [cond; e1; e2], srt) ->
+      Debug.debug(fun () -> sprintf "cond %s\n" (string_of_term cond)); 
+      Debug.debug(fun () -> sprintf "e1 %s\n" (string_of_term e1)); 
+      Debug.debug(fun () -> sprintf "e2 %s\n" (string_of_term e2)); 
       eval_term state cond (fun state2 cond' ->
-        eval_term state2 e1 (fun state3 e1' ->
-          eval_term state3 e2 (fun state4 e2' ->
-            fc state4 (GrassUtil.mk_ite cond' e1' e2'))))
+        Debug.debug(fun () -> sprintf "Calling join\n");
+        join state2 (fun state3 q_join ->
+          branch state3 (Atom (cond', [])) 
+            (fun state3' -> eval_term state3' e1 q_join)
+            (fun state3' -> eval_term state3' e2 q_join))
+        (fun state3 v -> 
+          match v with
+          | [([Atom (e1', _)], e2'); ([_], e3')] ->
+          (* look at what form e1' and see if it's singleton term Bool. *)
+            Debug.debug(fun () -> sprintf "e1 JOIN %s\n" (string_of_term e1')); 
+            fc state3 (App (Ite, [e1'; e2'; e3'], srt))
+          | ll ->
+              let _ = List.map (fun (fs, ts) ->
+              Debug.debug(fun () -> sprintf "(fs: %s, ts: %s)\n" (string_of_forms fs) (string_of_term ts))) ll
+              in
+            failwith "die"))
+
   | App (symb, ts, srt) -> todo "eval_term catch all"
 
 (** eval_forms evaluates a formula list fs element-wise using the eval

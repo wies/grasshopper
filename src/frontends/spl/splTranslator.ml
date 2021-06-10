@@ -805,6 +805,9 @@ let convert cu =
                 | Annot (e, a, pos2) ->
                     Annot (desugar_ite r e, a, pos2)
                 | Ite (cond, t, e, pos) ->
+                    if !Config.symbexec_v2 then
+                      Ite(cond, t, e, pos)
+                    else
                     BinaryOp (BinaryOp (cond, OpImpl, desugar_ite r t, BoolType, pos),
                               OpAnd,
                               BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, desugar_ite r e, BoolType, pos),

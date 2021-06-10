@@ -43,6 +43,7 @@ let fun_axiom name args srt precond state =
 
   (* replace rhs formula without the equality on the return val *)
   let rhs = List.hd (remove_at 0 (get_pc_stack (List.hd state.pc))) in
+  Debug.debug(fun () -> sprintf "rhs (%s)\n" (string_of_form rhs));
   let rhs_srt = sort_of_ret_val rhs in
 
   (* find the snap variables in the rhs signature *)

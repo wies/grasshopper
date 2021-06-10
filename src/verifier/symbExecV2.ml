@@ -276,7 +276,7 @@ let rec exec state comm (fc: symb_state -> vresult) =
           in
           Result.Ok (Opt.get (Result.to_option (produce_sl_form state2 test_inv_form (fresh_snap_tree ()) (fun state3 ->
             exec state3 l.loop_postbody (fun state4 ->
-              consume_sl_form state4 state.heap invar (fun _ _ _ -> Result.Ok []))))
+              consume_sl_form state4 state.heap invar (fun _ _ _ -> Result.Ok (Forms [])))))
           |> Opt.lazy_or_else (fun () ->
             Result.to_option (consume_sl_form state state.heap invar (fun state1' h s ->
               let state2' = {state1' with store=new_gamma} in
@@ -368,12 +368,12 @@ let verify_pred spl_prog prog aux_axioms pred =
     (havoc empty_store formal_terms) prog pred.pred_contract in
 
   let body = (IdMap.find name prog.prog_preds).pred_body |> Opt.get in
-  let result = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> Result.Ok []) in
+  let result = produce init_state body.spec_form (fresh_snap_tree ()) (fun _ -> Result.Ok (Forms [])) in
   match result with
   | Result.Error err -> 
       Debug.debug (fun () -> sprintf "err (%s)\n" (err));
       aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
-  | Result.Ok axioms -> 
+  | Result.Ok (Forms axioms) -> 
       Debug.debug (fun () -> sprintf "VERIFY pred\n");
       let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
       axioms @ aux_axioms, []
@@ -423,6 +423,7 @@ let verify_function spl_prog prog aux_axioms func =
   (* change this to be an either type *)
   let result = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
+    Debug.debug(fun () -> "verify_function produce body");
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
           (* fun_axiom can use mk_sequent to build the right axiom. *)
@@ -435,14 +436,14 @@ let verify_function spl_prog prog aux_axioms func =
          * forall x, y, z :: precond |-> f() = body try mk_sequent *)
         let prog' = {st3'.prog with prog_axioms = sfs @ st3'.prog.prog_axioms} in
         let _ = print_prog stdout prog' in
-        Result.Ok [axioms] 
+        Result.Ok (Forms [axioms])
     )))
   in
   match result with
   | Result.Error err -> 
       Debug.debug (fun () -> sprintf "err (%s)\n" (err));
       aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
-  | Result.Ok axioms -> 
+  | Result.Ok (Forms axioms) -> 
       Debug.debug (fun () -> sprintf "VERIFY FUNCTION \n");
       let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
       axioms @ aux_axioms, []
@@ -498,8 +499,8 @@ let verify spl_prog prog aux_axioms proc =
            | Some body ->
               Debug.debug (fun () -> "EXEC BODY\n");
               exec st body (fun st3 ->
-                consumes st3 postcond (fun _ _ -> Result.Ok []))
-           | None -> Result.Ok [])
+                consumes st3 postcond (fun _ _ -> Result.Ok (Forms [])))
+           | None -> Result.Ok (Forms []))
       ))
   in 
   match result with

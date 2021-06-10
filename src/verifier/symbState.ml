@@ -14,11 +14,6 @@ let todo str = Error str
 exception SymbExecFail of string
 let raise_err str = Error str
 
-(** Verification result type. *)
-(* first indicates a successful verification, the second indicates an error and carries a message. *)
-(* try passing the state in ok *)
-type vresult = (form list, string) Result.t 
-
 (** Symbolic values *)
 let mk_fresh_symb_var prefix srt = 
   mk_var srt (fresh_ident prefix) 
@@ -31,6 +26,12 @@ let sort_of_symb_val (_, srt) = srt
 let string_of_terms ts =
   ts
   |> List.map (fun t -> string_of_term t)
+  |> String.concat ", "
+  |> sprintf "[%s]"
+
+let string_of_forms fs =
+  fs
+  |> List.map (fun f -> string_of_form f)
   |> String.concat ", "
   |> sprintf "[%s]"
 
@@ -130,6 +131,15 @@ let merge_stores s1 s2 =
 type pc_chunk = ident * form * form list
 type pc_stack = pc_chunk list
 
+(** Verification result type. *)
+(* first indicates a successful verification, the second indicates an error and carries a message. *)
+(* try passing the state in ok *)
+type res =
+  | Forms of form list
+  | PCList of  pc_chunk list * term
+
+type vresult = (res, string) Result.t 
+
 let string_of_pcset s =
   s
   |> List.map (fun f -> (string_of_form f))
@@ -167,10 +177,10 @@ let pc_add_path_conds (stack: pc_stack) fs =
 let rec pc_after (pcs: pc_stack) scope_id =
   match pcs with
   | [] -> []
-  | (sid, bc, pcs) :: stack' ->
+  | stack' :: (sid, bc, pcs) :: suffix ->
     if sid = scope_id
-    then (sid, bc, pcs) :: pc_after stack' scope_id
-    else pc_after stack' scope_id
+    then [stack']
+    else pc_after suffix scope_id
 
 let pc_collect_constr (stack: pc_stack) =
   List.fold_left
@@ -431,6 +441,7 @@ type symb_state = {
     heap: symb_heap;
     prog: program; (* need to carry around prog for prover check *)
     contract: contract;
+    qvs: term list;
   }
 
 let mk_symb_state st prog contract =
@@ -439,7 +450,8 @@ let mk_symb_state st prog contract =
     pc=[];
     heap=[];
     prog=prog;
-    contract=contract
+    contract=contract;
+    qvs=[];
   }
 
 
@@ -476,4 +488,5 @@ let merge_states s1 s2 =
    pc=merge_lsts s1.pc s2.pc;
    prog=s1.prog (* programs are the same *);
    contract=s1.contract (* procs are the same *);
+   qvs=merge_lsts s1.qvs s2.qvs;
  }
