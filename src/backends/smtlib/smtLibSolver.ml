@@ -707,6 +707,7 @@ let smtlib_symbol_of_grass_symbol_bv solver_info sym = match sym with
   | GtEq -> SmtLibSyntax.BvSge
   | Lt -> SmtLibSyntax.BvSlt
   | Gt -> SmtLibSyntax.BvSgt
+  | Ite -> SmtLibSyntax.Ite
   | Constructor id | Destructor id -> SmtLibSyntax.Ident id
   | BitAnd -> SmtLibSyntax.BvAnd
   | BitOr -> SmtLibSyntax.BvOr
