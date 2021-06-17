@@ -5,7 +5,6 @@ struct Node {
    var  next: Node;
 }
 
-/*
 function f(x: Node, y: Node) returns (z: Int)
   requires acc(x.data) &*& acc(y.data)
   ensures x.data + y.data == z
@@ -13,6 +12,7 @@ function f(x: Node, y: Node) returns (z: Int)
   x.data + y.data
 }
 
+/*
 procedure add_nodes(a: Node, b: Node) returns (c: Node)
   requires acc(a.data) &*& acc(b.data)
   ensures acc(a.data) &*& acc(b.data) &*& acc(c.data) &*& c.data == a.data + b.data
@@ -28,4 +28,12 @@ function double(b: Bool, x: Node, y: Node, z: Node) returns (r: Int)
   requires b ? z == x : z == y
 {
   b ? x.data + z.data : y.data + z.data
+}
+
+procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int) 
+  requires acc(a.data) &*& acc(b.data)
+  ensures acc(a.data) &*& acc(b.data) &*& r == 2*a.data
+{
+  var z := double(true, a, b, a);
+  r := z;
 }

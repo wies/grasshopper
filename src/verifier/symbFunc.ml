@@ -12,18 +12,23 @@ let rec remove_at n = function
 let sort_of_ret_val f = 
   match f with
   | Atom (App (Eq, [h1; h2], _), _) -> sort_of h2 
+  | Atom (App (Ite, [_; t1; _], _), _) -> sort_of t1
   | _ -> failwith "foo"
+
 
 let subst_ret_val f sub = 
   match f with
   | Atom (App (Eq, [h1; h2], a), b) ->  Atom (App (Eq, [sub; h2], a), b)  
-  | _ -> f 
+  | Atom (App (Ite, ts, a), _) ->
+      mk_eq sub (App (Ite, ts, a))
+  | _ -> f
 
 let get_ret_val f = 
   match f with
   | Atom (App (Eq, [h1; h2], _), _) ->
       Debug.debug( fun () -> sprintf "GETRETVAL (%s)\n" (string_of_term h2));
       h2 
+  | Atom (App (Ite, ts, x), y) -> App (Ite, ts, x)
   | _ -> failwith "foo"
 
 let get_pc_stack (_, _, s) = s
@@ -84,6 +89,7 @@ let fun_axiom name args srt precond state =
   let lhs_vars = List.map (fun (id, srt) -> Var(id, srt)) bounds in
   let lhs = mk_free_fun rhs_srt name (List.rev lhs_vars) in  
   Debug.debug(fun () -> sprintf "LHS (%s)\n" (string_of_term lhs));
+
   let pred = (mk_sequent precond [subst_ret_val rhs lhs]) in
   Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
   let pred' = GrassUtil.subst_consts sm pred in
