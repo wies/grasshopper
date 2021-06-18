@@ -46,26 +46,23 @@ let fun_axiom name args srt precond state =
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
+  (* lookup each arg in args and get symbolic values *)
+  let symb_args = List.map (fun a -> find_symb_val state.store a) args in
+  Debug.debug(fun () -> sprintf "symb_args %s\n" (string_of_term_list symb_args));
+
   (* replace rhs formula without the equality on the return val *)
   let rhs = List.hd (remove_at 0 (get_pc_stack (List.hd state.pc))) in
   Debug.debug(fun () -> sprintf "rhs (%s)\n" (string_of_form rhs));
   let rhs_srt = sort_of_ret_val rhs in
 
-  (* find the snap variables in the rhs signature *)
-  let rhs_sig = sign_term (get_ret_val rhs) in
-  let rhs_vars = SymbolMap.fold (fun k arity acc -> 
-    Debug.debug(fun () -> sprintf "k = (%s), (%s)\n" (string_of_symbol k) (string_of_arity arity));
-    if List.length (fst arity) = 0 then
-      (mk_var (snd arity) (mk_ident (string_of_symbol k))) :: acc
-    else
-      acc
-    ) rhs_sig []
-  in
-
-  (* The sig doesn't have fresh_snap vars so we need to look use sorted_free_vars_term to get the snap vars*)
-  let bound_vars = (List.rev args) @ rhs_vars in
+  (* use sorted_free_vars_term to get the snap vars*)
+  let bound_vars = List.rev symb_args in
   let fv = sorted_free_vars_term (get_ret_val rhs) in
-  let fvs = IdSrtSet.elements fv in
+  let fvs = IdSrtSet.filter (fun id ->
+    let re = Str.regexp "fresh_snap*" in
+    Str.string_match re (string_of_ident (fst id)) 0) fv in
+  let fvs = IdSrtSet.elements fvs in
+
 
   let bounds = List.rev (List.fold_left (fun acc v ->
     match v with
