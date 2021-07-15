@@ -320,6 +320,17 @@ let spec_forms_to_forms =
           [f1]
       | SL _ -> [])
 
+
+let rec mk_bool_form t =
+ let trans_terms ts = 
+       List.map (fun t -> mk_bool_form t) ts 
+ in
+ match t with
+ | App(AndTerm, ts, _) -> BoolOp(And, trans_terms ts)
+ | App(OrTerm, ts, _) -> BoolOp(Or, trans_terms ts)
+ | App(NotTerm, ts, _) -> BoolOp(Not, trans_terms ts)
+ | t -> Atom(t, [])
+
 let cart_prod fcomb l1 l2 = 
   let p = List.fold_left (fun acc x ->
     List.fold_left (fun acc2 z ->
@@ -330,27 +341,43 @@ let cart_prod fcomb l1 l2 =
 
 let rec translate_ite f =
   (* translates terms into nested lists of pairs*)
-  let rec ftt = function
+  let rec terms_to_fpairs = function
     | Var (_, _) | App(Undefined, [], _) | App(IntConst _, [], _)
-    | App(BoolConst _, [], _) | App(FreeSym _, [], _) as t -> [([], t)]
-    | App(Ite, [cond; t1; t2], srt) ->
-        let l1 = List.map (fun (cnd, t) -> (cond :: cnd, t)) (ftt t1) in
-        let l2 = List.map (fun (cnd, t) -> (cond :: cnd, t)) (ftt t2) in
-        l1 @ l2
+    | App(BoolConst _, [], _) | App(Eq, _, _) | App(FreeSym _, [], _) as t -> [([], t)]
     | App(Plus, [t1; t2], srt) -> 
-     let l1 = ftt t1 in
-     let l2 = ftt t2 in 
-     let l3 = cart_prod (fun x y -> ((fst x) @ (fst y), [snd x; snd y])) l1 l2 in 
-     List.map (fun (cnds, t1) -> (cnds, App(Plus, t1, srt))) l3
-    | t -> failwith "unimplemented"
+     let plst1 = terms_to_fpairs t1 in
+     let plst2 = terms_to_fpairs t2 in 
+     let l3 = cart_prod (fun x y ->
+       ((fst x) @ (fst y), [snd x; snd y]))
+       plst1 plst2
+     in 
+     (* push the outer app into the second part of each pair*)
+     List.map (fun (cnds, tt) -> (cnds, App(Plus, tt, srt))) l3
+    | App(Ite, [cond; t1; t2], srt) ->
+        let plst1 = terms_to_fpairs t1 in
+        let plst2 = terms_to_fpairs t2 in
+        let l1 = List.map (fun (cnd, t) ->
+          (mk_bool_form cond :: cnd, t))
+          plst1
+        in
+        let l2 = List.map (fun (cnd, t) ->
+          (mk_not (mk_bool_form cond) :: cnd, t))
+          plst2
+        in
+        l1 @ l2
+    | t -> 
+        Debug.debug(fun () -> sprintf "translate_ite %s\n" (string_of_term t));
+        failwith "unimplemented"
   in
   let rec ff = function
     | Atom (t, a) -> 
-        let fm_lst = ftt t in
-        let cnjcts = List.map (fun c -> mk_implies (mk_and c) (Atom(c, a))) fm_lst in 
-        List.fold_left (fun acc c -> mk_and c [acc]) (List.hd cnjcts) (List.tl cnjcts)
-    | BoolOp (op, fs) -> BoolOp (op, List.map f fs)
-    | Binder (b, bvs, f, a) -> Binder (b, bvs, f f, a)
+        let plst = terms_to_fpairs t in
+        List.fold_left (fun acc c -> 
+          let cnjts = mk_and (fst c) in
+          mk_and [mk_implies cnjts (Atom(snd c, a)); acc])
+        (mk_true) plst
+    | BoolOp (op, fs) -> BoolOp (op, List.map ff fs)
+    | Binder (b, bvs, f, a) -> Binder (b, bvs, ff f, a)
   in
   ff f
 
