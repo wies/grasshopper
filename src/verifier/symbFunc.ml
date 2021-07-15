@@ -18,7 +18,9 @@ let sort_of_ret_val f =
 
 let subst_ret_val f sub = 
   match f with
-  | Atom (App (Eq, [h1; h2], a), b) ->  Atom (App (Eq, [sub; h2], a), b)  
+  | Atom (App (Eq, [h1; h2], a), b) -> 
+      Debug.debug(fun() -> "subs ret val\n");
+      Atom (App (Eq, [sub; h2], a), b)  
   | Atom (App (Ite, ts, a), _) ->
       mk_eq sub (App (Ite, ts, a))
   | _ -> f

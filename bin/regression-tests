@@ -154,8 +154,8 @@ symb_exec_viper:tree tests/spl/symb_exec_v2/treeset.spl                ''     pa
 res=0
 SECONDS=0 # Using simpler timing logic for the entire script since individual tests are timed
 
-OPTIONS="$@" ./bin/run-tests $TESTS || res=$?
-OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
+#OPTIONS="$@" ./bin/run-tests $TESTS || res=$?
+#OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_TESTS || res=$?
 OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_VIPER_TESTS || res=$?
 ./bin/xp_pldi20.sh || res=$?
 

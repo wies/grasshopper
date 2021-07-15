@@ -9,8 +9,8 @@ lemma unfold_lseg(x: Node, y: Node)
 }
 
 lemma fold_left(x: Node, y: Node)
-  requires acc(x.next) &*& lseg(x.next, y) &*& y != x
-  ensures lseg(x, y)
+  requires acc(x.next) &*& acc(y.next) &*& lseg(x.next, y.next) &*& y != x
+  ensures lseg(x.next, y.next)
 {
   unfold lseg(x.next, y);
 }

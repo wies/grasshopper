@@ -197,7 +197,7 @@ let dualize_op op =
   | And -> Or
   | Or -> And
   | Not -> failwith "tried to dualize Not"
-  
+
 let dualize_binder = function
   | Forall -> Exists
   | Exists -> Forall
@@ -846,6 +846,9 @@ let map_terms fn f =
   in
   let rec mt = function
     | Atom (t, a) -> Atom (fn t, ma a)
+                            (*fn gives back this list of pairs "final pairs with App pushed in"*)
+                            (* fn t ->  [p; q], Atom(1 + 3, a)); ma igore.*)
+                            (* function to build BoolAnd Impl return this result.*)
     | BoolOp (op, fs) -> BoolOp (op, List.map mt fs)
     | Binder (b, vs, f, a) -> Binder (b, vs, mt f, ma a)
   in mt f

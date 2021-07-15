@@ -45,6 +45,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
    Debug.debug(fun () -> sprintf "PURE \n");
    produce_form state p snp fc
   | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], a) ->
+     Debug.debug(fun() -> sprintf "Region snap %s\n" (string_of_term snp));
      eval_term state obj (fun state' obj' ->
        let hc = mk_heap_chunk_obj id obj' snp in 
         let h, stack = heap_add state'.heap state'.pc hc in

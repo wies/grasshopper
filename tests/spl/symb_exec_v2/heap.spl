@@ -5,17 +5,10 @@ struct Node {
 }
 
 procedure lookup_heap_1(x: Node, y: Node)
-  requires acc(x.next) &*& x.next == null
-  ensures acc(x.next) &*& acc(y.next) &*& x.next == y
+  requires acc(x.next) &*& acc(y.next) &*& x.next == null
+  ensures acc(x.next) &*& acc(y.next) &*& x.next == y.next
 {
- y := x.next;
-}
-
-procedure lookup_heap_3(x: Node) returns (y: Node)
-  requires acc(x.next) &*& x.next == null
-  ensures acc(x.next) &*& acc(y.next) &*& x.next == y
-{
- y := x.next;
+ y.next := x.next;
 }
 
 procedure lookup_heap_assign(x: Node) returns (y: Node)
@@ -45,6 +38,8 @@ procedure assign_heap2(x: Node, y: Node)
   x.next := x;
 }
 
+/*
+// bug
 procedure assign_heap3(x: Node, y: Node)
   requires acc(x.next) &*& x.next == null &*& acc(y.next) &*& y == x
   ensures acc(x.next) &*& x.next == x
@@ -52,11 +47,13 @@ procedure assign_heap3(x: Node, y: Node)
   y.next := x;
 }
 
+// bug
 procedure spatial_neq1(x: Node, y: Node)
   requires acc(x.next) &*& acc(y.next)
-  ensures acc(x.next) &*& acc(y.next) &*& x != y
+  ensures acc(x.next) &*& acc(y.next) &*& x.next != y.next
 {}
 
+// bug
 procedure assign_heap4(x: Node, y: Node)
   requires acc(x.next) &*& acc(y.next) &*& x.next == y &*& x.next.next == null
   ensures acc(x.next) &*& acc(y.next) &*& x.next == y &*& y.next == x
@@ -64,9 +61,11 @@ procedure assign_heap4(x: Node, y: Node)
   y.next := x;
 }
 
+// bug
 procedure assign_heap5(x: Node, y: Node)
-  requires acc(x.next) &*& x.next == y &*& acc(y.next) &*& y.next = null
+  requires acc(x.next) &*& x.next == y &*& acc(y.next) &*& y.next == null
   ensures acc(x.next) &*& x.next == y &*& acc(y.next) &*& y.next == x
 {
   x.next.next := x;
 }
+*/

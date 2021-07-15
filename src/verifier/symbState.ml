@@ -217,7 +217,12 @@ let emp_snap =
   App (Constructor emp_id, [], snap_typ)
 
 let snap_pair s1 s2 =
-  App (Constructor tree_id, [s1; s2], snap_typ) 
+  (*
+  match s2 with
+  | App (Constructor c, [], snap_typ) when c = emp_id -> s1
+  | _ -> App (Constructor tree_id, [s1; s2], snap_typ)  
+  *)
+  App (Constructor tree_id, [s1; s2], snap_typ)  
 
 let fresh_snap_tree () =
   mk_var snap_typ (fresh_ident "fresh_snap")
@@ -256,7 +261,7 @@ let string_of_hc chunk =
     sprintf "Obj(fld:%s, rcvr:%s, snp:%s)" (string_of_ident id) (string_of_term rcvr) (string_of_term snp)
   | ObjPred (id, args, snp) ->
     sprintf "ObjPred(%s, args:%s, snp:%s)" (string_of_ident id)
-      (string_of_term snp) (string_of_term_list args)
+      (string_of_term_list args) (string_of_term snp) 
 
 type symb_heap = heap_chunk list
 
@@ -315,6 +320,40 @@ let spec_forms_to_forms =
           [f1]
       | SL _ -> [])
 
+let cart_prod fcomb l1 l2 = 
+  let p = List.fold_left (fun acc x ->
+    List.fold_left (fun acc2 z ->
+      (fcomb x z) :: acc2) acc l2)
+  [] l1
+  in
+  List.rev p
+
+let rec translate_ite f =
+  (* translates terms into nested lists of pairs*)
+  let rec ftt = function
+    | Var (_, _) | App(Undefined, [], _) | App(IntConst _, [], _)
+    | App(BoolConst _, [], _) | App(FreeSym _, [], _) as t -> [([], t)]
+    | App(Ite, [cond; t1; t2], srt) ->
+        let l1 = List.map (fun (cnd, t) -> (cond :: cnd, t)) (ftt t1) in
+        let l2 = List.map (fun (cnd, t) -> (cond :: cnd, t)) (ftt t2) in
+        l1 @ l2
+    | App(Plus, [t1; t2], srt) -> 
+     let l1 = ftt t1 in
+     let l2 = ftt t2 in 
+     let l3 = cart_prod (fun x y -> ((fst x) @ (fst y), [snd x; snd y])) l1 l2 in 
+     List.map (fun (cnds, t1) -> (cnds, App(Plus, t1, srt))) l3
+    | t -> failwith "unimplemented"
+  in
+  let rec ff = function
+    | Atom (t, a) -> 
+        let fm_lst = ftt t in
+        let cnjcts = List.map (fun c -> mk_implies (mk_and c) (Atom(c, a))) fm_lst in 
+        List.fold_left (fun acc c -> mk_and c [acc]) (List.hd cnjcts) (List.tl cnjcts)
+    | BoolOp (op, fs) -> BoolOp (op, List.map f fs)
+    | Binder (b, bvs, f, a) -> Binder (b, bvs, f f, a)
+  in
+  ff f
+
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 (** carry over from Sid's SymbExec *)
 let check_entail prog p1 p2 =
@@ -334,6 +373,8 @@ let check_entail prog p1 p2 =
       |> fun f -> f :: Verifier.pred_axioms prog2 
       (** TODO: Add axioms *)
       |> (fun fs -> smk_and (fs @ snap_axioms @ fun_axioms))
+      |> translate_ite 
+      (* possibly call nnf again*)
       (* Add labels *)
       |> Verifier.add_labels
     in

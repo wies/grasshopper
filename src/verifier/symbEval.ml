@@ -215,7 +215,10 @@ and eval_form state f (fc: symb_state -> form -> vresult) =
       sprintf "***** BoolOp\n");
     eval_forms state fs (fun state' fs' ->
       fc state' (BoolOp (op, fs')))
-  | Binder (binder, [], f, a) -> fc state (Binder (binder, [], f, a))
+  | Binder (binder, [], f, a) -> 
+      Debug.debug(fun() -> "*** BINDER\n");
+      eval_form state f (fun state' f' ->
+        fc state (Binder (binder, [], f', a)))
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
 
 (* Handles a cyclical dependency *)
