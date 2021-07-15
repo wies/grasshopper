@@ -32,7 +32,7 @@ function double(b: Bool, x: Node, y: Node, z: Node) returns (r: Int)
 
 procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int) 
   requires acc(a.data) &*& acc(b.data)
-  ensures acc(a.data) &*& acc(b.data) &*& r == 2*a.data
+  ensures acc(a.data) &*& acc(b.data) &*& r == a.data + a.data
 {
   var z := double(true, a, b, a);
   r := z;

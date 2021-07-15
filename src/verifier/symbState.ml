@@ -320,21 +320,24 @@ let spec_forms_to_forms =
           [f1]
       | SL _ -> [])
 
-
 let rec mk_bool_form t =
  let trans_terms ts = 
        List.map (fun t -> mk_bool_form t) ts 
  in
+ let op_form = function
+   | AndTerm -> And
+   | OrTerm -> Or
+   | NotTerm -> Not
+ in
  match t with
- | App(AndTerm, ts, _) -> BoolOp(And, trans_terms ts)
- | App(OrTerm, ts, _) -> BoolOp(Or, trans_terms ts)
- | App(NotTerm, ts, _) -> BoolOp(Not, trans_terms ts)
+ | App((AndTerm | OrTerm | NotTerm) as op, ts, _) 
+     -> BoolOp(op_form op, trans_terms ts)
  | t -> Atom(t, [])
 
-let cart_prod fcomb l1 l2 = 
+let cart_prod f l1 l2 = 
   let p = List.fold_left (fun acc x ->
     List.fold_left (fun acc2 z ->
-      (fcomb x z) :: acc2) acc l2)
+      (f x z) :: acc2) acc l2)
   [] l1
   in
   List.rev p
@@ -343,16 +346,35 @@ let rec translate_ite f =
   (* translates terms into nested lists of pairs*)
   let rec terms_to_fpairs = function
     | Var (_, _) | App(Undefined, [], _) | App(IntConst _, [], _)
-    | App(BoolConst _, [], _) | App(Eq, _, _) | App(FreeSym _, [], _) as t -> [([], t)]
-    | App(Plus, [t1; t2], srt) -> 
-     let plst1 = terms_to_fpairs t1 in
-     let plst2 = terms_to_fpairs t2 in 
-     let l3 = cart_prod (fun x y ->
-       ((fst x) @ (fst y), [snd x; snd y]))
-       plst1 plst2
-     in 
-     (* push the outer app into the second part of each pair*)
-     List.map (fun (cnds, tt) -> (cnds, App(Plus, tt, srt))) l3
+    | App(BoolConst _, [], _) | App(Eq, [], _)
+    | App(FreeSym _, _, _) | App(Destructor _, _, _) 
+    | App(Constructor _, _, _) as t -> [([], t)]
+    | App(FreeSym id, [t], srt) ->
+       let plst1 = terms_to_fpairs t in
+       let l3 = cart_prod (fun x y ->
+         ((fst x) @ (fst y), [snd x; snd y]))
+          plst1 [] 
+       in 
+       (* push the outer app into the second part of each pair*)
+       List.map (fun (cnds, tt) -> (cnds, App(FreeSym id, tt, srt))) l3
+    | App(Eq, [t1; t2], srt) ->
+       let plst1 = terms_to_fpairs t1 in
+       let plst2 = terms_to_fpairs t2 in 
+       let l3 = cart_prod (fun x y ->
+         ((fst x) @ (fst y), [snd x; snd y]))
+         plst1 plst2
+       in 
+       (* push the outer app into the second part of each pair*)
+       List.map (fun (cnds, tt) -> (cnds, App(Eq, tt, srt))) l3
+    | App(op, [t1; t2], srt) -> 
+       let plst1 = terms_to_fpairs t1 in
+       let plst2 = terms_to_fpairs t2 in 
+       let l3 = cart_prod (fun x y ->
+         ((fst x) @ (fst y), [snd x; snd y]))
+         plst1 plst2
+       in 
+       (* push the outer app into the second part of each pair*)
+       List.map (fun (cnds, tt) -> (cnds, App(op, tt, srt))) l3
     | App(Ite, [cond; t1; t2], srt) ->
         let plst1 = terms_to_fpairs t1 in
         let plst2 = terms_to_fpairs t2 in
@@ -365,17 +387,26 @@ let rec translate_ite f =
           plst2
         in
         l1 @ l2
-    | t -> 
-        Debug.debug(fun () -> sprintf "translate_ite %s\n" (string_of_term t));
-        failwith "unimplemented"
+    | App(sym, ts, srt) ->
+       let plst1 = List.map (fun t -> terms_to_fpairs t) ts in
+       let fg = (fun x y ->
+         ((fst x) @ (fst y), snd x @ [snd y]))
+       in
+       let l1 = List.fold_left (fun acc l ->
+         cart_prod fg acc l)
+       [([],[])] plst1
+       in
+       (* push the outer app into the second part of each pair*)
+       List.map (fun (cnds, tt) -> (cnds, App(sym, tt, srt))) l1
   in
   let rec ff = function
     | Atom (t, a) -> 
         let plst = terms_to_fpairs t in
-        List.fold_left (fun acc c -> 
+        let frms =List.map(fun c -> 
           let cnjts = mk_and (fst c) in
-          mk_and [mk_implies cnjts (Atom(snd c, a)); acc])
-        (mk_true) plst
+          mk_implies cnjts (Atom(snd c, a))) plst
+        in
+        mk_and frms
     | BoolOp (op, fs) -> BoolOp (op, List.map ff fs)
     | Binder (b, bvs, f, a) -> Binder (b, bvs, ff f, a)
   in
@@ -400,6 +431,7 @@ let check_entail prog p1 p2 =
       |> fun f -> f :: Verifier.pred_axioms prog2 
       (** TODO: Add axioms *)
       |> (fun fs -> smk_and (fs @ snap_axioms @ fun_axioms))
+      |> (fun f -> Debug.debug(fun () -> sprintf "form before ite FOO %s\n" (string_of_form f)); f)
       |> translate_ite 
       (* possibly call nnf again*)
       (* Add labels *)
