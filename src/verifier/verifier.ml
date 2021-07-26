@@ -402,9 +402,12 @@ let pred_axioms prog =
         formals
     in
     let pred_vs = mk_pred_vars sorted_vs in
-    let pred_match_term, generate_knowns = match_term_generator returns pred_vs name (accesses_pred pred) locals in
+    let pred_match_term, generate_knowns =
+      match_term_generator returns pred_vs name (accesses_pred pred) locals
+    in
     let m = Match (mk_known pred_match_term, []) in
-    annotate (add_match pred_match_term pred_vs m (add_generators prog (Some (name, m)) f)) generate_knowns
+    annotate (add_match pred_match_term pred_vs m
+      (add_generators prog (Some (name, m)) f)) generate_knowns
   in
   let pred_def pred =
     let locals = locals_of_pred pred in
