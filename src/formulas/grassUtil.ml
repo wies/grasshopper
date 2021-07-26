@@ -1754,7 +1754,6 @@ module Clauses = struct
 
 end
 
-
 (** Unit tests for GrassUtil.equal *)
 
 (*let _ =

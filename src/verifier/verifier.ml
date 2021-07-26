@@ -353,6 +353,39 @@ let add_generators prog aux_match f =
   ag IdSet.empty f
   (* end of add_generators *)
 
+let mk_pred_vars svs = List.map (fun (x, srt) -> mk_var srt x) svs
+
+let match_term_generator returns pred_vs name accesses (locals: Prog.var_decl Grass.IdMap.t) = 
+  match returns with
+  | [] ->
+    let mt = mk_free_fun Bool name pred_vs in
+    mt,
+    if IdSet.mem name accesses
+    then []
+    else [TermGenerator ([Match (mt, [])], [mk_known mt])]
+  | [x] ->
+    let var = IdMap.find x locals in
+    mk_free_fun var.var_sort name pred_vs, []
+  | _ -> failwith "Functions may only have a single return value."
+
+let rec add_match pred_match_term pred_vs m = function
+  | Binder (b, vs, f, annots) ->
+      let annots1 =
+        List.map
+          (function
+            | TermGenerator (ms, ts) ->
+                let not_var_match = function Match (t, _) -> not @@ List.mem t pred_vs in
+                let ms1 = List.filter not_var_match ms in
+                let ts1 = List.filter ((<>) pred_match_term &&& (<>) (mk_known pred_match_term)) ts in
+                TermGenerator (m :: ms1, ts1)
+            | a -> a)
+          annots
+      in
+      Binder (b, vs, add_match pred_match_term pred_vs m f, annots1)
+  | BoolOp (op, fs) ->
+      BoolOp (op, List.map (add_match pred_match_term pred_vs m) fs)
+  | f -> f
+
 (** Generate axioms from predicate definitions *)
 let pred_axioms prog =
   (* Annotates term generators in predicate bodies *)
@@ -368,39 +401,10 @@ let pred_axioms prog =
           x, var.var_sort)
         formals
     in
-    let pred_vs = List.map (fun (x, srt) -> mk_var srt x) sorted_vs in
-    let pred_match_term, generate_knowns = match returns with
-    | [] ->
-        let mt = mk_free_fun Bool name pred_vs in
-        mt,
-        if IdSet.mem name (accesses_pred pred)
-        then []
-        else [TermGenerator ([Match (mt, [])], [mk_known mt])]
-    | [x] ->
-        let var = IdMap.find x locals in
-        mk_free_fun var.var_sort name pred_vs, []
-    | _ -> failwith "Functions may only have a single return value."
-    in
+    let pred_vs = mk_pred_vars sorted_vs in
+    let pred_match_term, generate_knowns = match_term_generator returns pred_vs name (accesses_pred pred) locals in
     let m = Match (mk_known pred_match_term, []) in
-    let rec add_match = function
-      | Binder (b, vs, f, annots) ->
-          let annots1 =
-            List.map
-              (function
-                | TermGenerator (ms, ts) ->
-                    let not_var_match = function Match (t, _) -> not @@ List.mem t pred_vs in
-                    let ms1 = List.filter not_var_match ms in
-                    let ts1 = List.filter ((<>) pred_match_term &&& (<>) (mk_known pred_match_term)) ts in
-                    TermGenerator (m :: ms1, ts1)
-                | a -> a)
-              annots
-          in
-          Binder (b, vs, add_match f, annots1)
-      | BoolOp (op, fs) ->
-          BoolOp (op, List.map add_match fs)
-      | f -> f
-    in
-    annotate (add_match (add_generators prog (Some (name, m)) f)) generate_knowns
+    annotate (add_match pred_match_term pred_vs m (add_generators prog (Some (name, m)) f)) generate_knowns
   in
   let pred_def pred =
     let locals = locals_of_pred pred in
