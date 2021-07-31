@@ -3,6 +3,7 @@ open Prog
 open SymbState 
 open Grass 
 open GrassUtil
+open Verifier
 open Axioms 
 
 let rec remove_at n = function
@@ -107,7 +108,15 @@ let fun_axiom name args srt precond state =
   Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
   let pred' = GrassUtil.subst_consts sm pred in
 
+
   let fun_axiom_id = mk_name_generator (string_of_ident name) in
-  let name, _ = (fun_axiom_id rhs_srt) in
+  let name_str, _ = (fun_axiom_id rhs_srt) in
+
   let fun_axiom = mk_forall bounds pred' in
-  mk_axiom name fun_axiom
+  let ax = mk_axiom name_str fun_axiom in
+  let fun_match_term, generate_knowns = (lhs, []) in
+
+  (* annotate the axiom with term generators *)
+  let m = Match (mk_known fun_match_term, []) in
+  annotate (add_match fun_match_term lhs_vars m 
+    (add_generators state.prog (Some(name, m)) ax)) generate_knowns

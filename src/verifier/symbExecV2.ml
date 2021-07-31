@@ -5,7 +5,6 @@ open Printf
 open Util 
 open GrassUtil
 open Grass
-open Verifier
 open SlUtil 
 open SymbEval
 open SymbState
@@ -393,13 +392,6 @@ let verify_function spl_prog prog aux_axioms func =
   let formals = formals_of_func func in
   let returns = returns_of_func func in
   let locals = Prog.locals_of_pred func in
-  let sorted_vs =
-      List.map
-        (fun x ->
-          let var = IdMap.find x locals in
-          x, var.var_sort)
-       formals
-  in
   let formal_terms =
     List.fold_left
       (fun acc var ->
@@ -407,11 +399,6 @@ let verify_function spl_prog prog aux_axioms func =
         Grass.Var (var, srt.var_sort) :: acc)
       [] (formals)
   in
-  let func_vs = mk_pred_vars sorted_vs in
-  let func_match_term, generate_knowns =
-      match_term_generator returns func_vs name (accesses_pred func) locals
-  in
-  let m = Match (mk_known func_match_term, []) in
   let return_term =
       let var = List.hd returns in
         let srt = Grass.IdMap.find var (Prog.locals_of_pred func) in
