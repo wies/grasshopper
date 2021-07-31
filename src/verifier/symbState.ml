@@ -237,6 +237,14 @@ type heap_chunk =
   | Obj of ident * term * term (* r.id -> (field id, r (term), snapshot) *)
   | ObjPred of ident * term list * term (* id, args, snapshot *)
 
+let field_of_hc = function
+  | Obj (id, _, _)
+  | ObjPred (id, _, _) -> id
+
+let rcvr_of_hc = function
+  | Obj (_, t, _) -> t
+  | _ -> failwith "can only call on Obj" 
+
 let mk_heap_chunk_obj field_id rcvr snp =
   Obj (field_id, rcvr, snp)
 
@@ -411,6 +419,39 @@ let rec translate_ite f =
     | Binder (b, bvs, f, a) -> Binder (b, bvs, ff f, a)
   in
   ff f
+
+let rec all_pairs h =
+  match h with
+  | [] -> []
+  | h' :: hs ->
+      let res = List.fold_left
+        (fun acc hc ->
+          (h', hc) :: acc)
+        [] hs
+      in
+      res @ all_pairs hs
+
+let infer_diseq h stack =
+  let m = List.fold_left
+    (fun m hc ->
+      let t = rcvr_of_hc hc in
+      let fld_id = field_of_hc hc in
+      let lst = IdMap.find_opt fld_id m in
+      match lst with
+      | Some l -> IdMap.add fld_id (t :: l) m
+      | None -> IdMap.add fld_id [t] m)
+    IdMap.empty h
+  in
+  IdMap.fold (fun _ lst acc ->
+    if List.length lst > 1 then
+      let pairs = all_pairs lst in
+      List.fold_left (fun acc p ->
+        let f = mk_eq (fst p) (snd p) in 
+        pc_add_path_cond acc f)
+      acc pairs
+    else
+      acc)
+  m stack
 
 (* Returns None if the entailment holds, otherwise Some (list of error messages, model) *)
 (** carry over from Sid's SymbExec *)

@@ -5,6 +5,7 @@ open Printf
 open Util 
 open GrassUtil
 open Grass
+open Verifier
 open SlUtil 
 open SymbEval
 open SymbState
@@ -381,6 +382,7 @@ let verify_pred spl_prog prog aux_axioms pred =
  
 let verify_function spl_prog prog aux_axioms func =
   (* again functions are represented as predicates with a single return value *)
+  (* func has info about pred_accesses which is critical for term gen, probably need to plumb this through into fun_axioms, start with empty IdSet and this should work with double, then do the recursive cases.*)
   let name = Prog.name_of_pred func in
   Debug.info (fun () ->
     "Checking function " ^ Grass.string_of_ident name ^ "...\n");
@@ -390,16 +392,26 @@ let verify_function spl_prog prog aux_axioms func =
   let returns_of_func = Prog.returns_of_pred in
   let formals = formals_of_func func in
   let returns = returns_of_func func in
-
+  let locals = Prog.locals_of_pred func in
+  let sorted_vs =
+      List.map
+        (fun x ->
+          let var = IdMap.find x locals in
+          x, var.var_sort)
+       formals
+  in
   let formal_terms =
-    let locs = Prog.locals_of_pred func in
     List.fold_left
       (fun acc var ->
-        let srt = Grass.IdMap.find var locs in
+        let srt = Grass.IdMap.find var locals in
         Grass.Var (var, srt.var_sort) :: acc)
       [] (formals)
   in
-
+  let func_vs = mk_pred_vars sorted_vs in
+  let func_match_term, generate_knowns =
+      match_term_generator returns func_vs name (accesses_pred func) locals
+  in
+  let m = Match (mk_known func_match_term, []) in
   let return_term =
       let var = List.hd returns in
         let srt = Grass.IdMap.find var (Prog.locals_of_pred func) in
