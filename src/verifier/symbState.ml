@@ -431,7 +431,7 @@ let rec all_pairs h =
       in
       res @ all_pairs hs
 
-let infer_diseq h stack =
+let infer_diseq heap stack =
   let m = List.fold_left
     (fun m hc ->
       let t = rcvr_of_hc hc in
@@ -440,13 +440,13 @@ let infer_diseq h stack =
       match lst with
       | Some l -> IdMap.add fld_id (t :: l) m
       | None -> IdMap.add fld_id [t] m)
-    IdMap.empty h
+    IdMap.empty heap
   in
   IdMap.fold (fun _ lst acc ->
     if List.length lst > 1 then
       let pairs = all_pairs lst in
       List.fold_left (fun acc p ->
-        let f = mk_eq (fst p) (snd p) in 
+        let f = mk_not (mk_eq (fst p) (snd p)) in 
         pc_add_path_cond acc f)
       acc pairs
     else

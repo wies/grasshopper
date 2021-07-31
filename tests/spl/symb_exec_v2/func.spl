@@ -37,3 +37,17 @@ procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int)
   var z := double(true, a, b, a);
   r := z;
 }
+
+procedure client(a: Node)
+  requires acc(a.data)
+{
+  set(a, 5);
+  a.data := 6;
+}
+
+procedure set(x: Node, i: Int)
+  requires acc(x.data) && x.data < i
+  ensures  acc(x.data) && x.data == i
+{
+  x.data := i;
+}
