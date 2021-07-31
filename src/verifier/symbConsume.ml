@@ -40,7 +40,6 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
         let (chunk, h') = heap_remove_by_term state.pc state.heap t' in
         fc state h' (emp_snap))
   | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], _) -> 
-     
      f_eval_term state obj (fun state' obj' ->
        let hc = heap_find_by_field_id state'.pc state'.heap state'.prog obj' id in
         Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
@@ -49,10 +48,10 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
         fc {state' with heap=h'} h' (get_heap_chunk_snap hc))
   | Sl.Atom (Sl.Region, ts, _) -> todo "region ts" 
   | Sl.Atom (Sl.Pred id, ts, _) -> 
+      Debug.debug(fun () -> "Atom Pred\n");
      f_eval_terms state ts (fun state' ts' ->
         let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in 
-
         fc {state' with heap=h'} h' (get_heap_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
@@ -92,6 +91,7 @@ let rec consume_sl_form_impl state heap (f: Sl.form) f_eval_form f_eval_terms f_
         fc state h' (get_heap_chunk_snap chunk))
   | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
   | Sl.Atom (Sl.Pred id, ts, _) -> 
+     Debug.debug(fun () -> "Pred\n");
      f_eval_terms state ts (fun state' ts' ->
         let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
         let h' = heap_remove state'.heap state'.pc pred_chunk in 

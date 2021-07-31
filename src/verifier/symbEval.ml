@@ -124,6 +124,9 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
         Debug.debug( fun () -> sprintf "IntConst (%s)\n" (string_of_term tt));
         fc state tt
     | _ as tt -> fc state tt)
+  | App (FreeSym id, [t], srt) ->
+      Debug.debug(fun() -> sprintf "FreeSym ts snp\n");
+      fc state t
   | App (FreeSym id, ts, srt1) ->
       Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_term_list ts) (string_of_sort srt1));
       eval_terms state ts (fun st' ts' ->

@@ -6,6 +6,7 @@ lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
   ensures acc(x.next) &*& lseg(x.next, y)
 {
+  unfold lseg(x.next, y);
 }
 
 lemma fold_left(x: Node, y: Node)
