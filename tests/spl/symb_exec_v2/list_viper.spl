@@ -1,0 +1,32 @@
+options "-symbexec-v2"
+
+struct ListNode {
+  var elem: Int;
+  var next: ListNode;
+}
+
+predicate list(this: ListNode) {
+  acc(this.elem) && acc(this.next) &&
+  (this.next == null || list(this.next))
+}
+
+procedure append(this: ListNode, e: Int)
+  requires list(this)
+  ensures  list(this)
+{
+  unfold list(this);
+
+  if (this.next == null) {
+    var n: ListNode; 
+
+    n := new ListNode();
+    n.elem := e;
+    n.next := null;
+    this.next := n;
+
+    fold list(n);
+  } else {
+    append(this.next, e);
+  }
+  fold list(this);
+}

@@ -1,0 +1,27 @@
+options "-symbexec-v2"
+
+struct Node {
+  var data: Int;
+  var next: Node;
+}
+
+procedure alias1(x: Node)
+    requires acc(x.next)
+    ensures acc(x.next)
+{ }
+
+procedure alias2(x: Node) returns (y: Node)
+    requires acc(x.next)
+    ensures acc(y.next)
+{ 
+    y := new Node();
+    x := y;
+    pure assert x == y;
+}
+
+procedure alias3(x: Node, y: Node) returns (z: Node)
+    requires acc(x.data) &*& acc(y.data)
+    ensures acc(z.data)
+{
+    assume (z == y || z == x);
+}
