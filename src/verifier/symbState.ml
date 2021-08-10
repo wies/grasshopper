@@ -432,6 +432,7 @@ let rec all_pairs h =
       res @ all_pairs hs
 
 let infer_diseq heap stack =
+  (* consider filtering out objPreds in the heap *)
   let m = List.fold_left
     (fun m hc ->
       let t = rcvr_of_hc hc in

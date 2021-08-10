@@ -6,25 +6,23 @@ lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
   ensures acc(x.next) &*& lseg(x.next, y)
 {
-  unfold lseg(x.next, y);
+  unfold lseg(x, y);
 }
 
 lemma fold_left(x: Node, y: Node)
-  requires acc(x.next) &*& acc(y.next) &*& lseg(x.next, y.next) &*& y != x
-  ensures lseg(x.next, y.next)
+  requires acc(x.next) &*& lseg(x.next, y) &*& y != x
+  ensures lseg(x, y)
 {
-  unfold lseg(x.next, y);
+  fold lseg(x, y);
 }
 
-/*
 lemma empty_list(x: Node)
   requires emp
   ensures lseg(x, x)
 {
-  unfold lseg(x, x);
   fold lseg(x, x);
 }
-*/ 
+
 procedure delete(x: Node)
   requires lseg(x, null)
   ensures emp
