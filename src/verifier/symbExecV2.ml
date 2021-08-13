@@ -482,22 +482,20 @@ let verify spl_prog prog aux_axioms proc =
   let init_state = mk_symb_state
     (havoc empty_store formal_return_terms) (declare_proc prog proc) contr' in
 
-  let old_store =
-    IdMap.fold (fun id v acc -> IdMap.add id v acc) init_state.store empty_store in
-  let init_state = {init_state with old_store=old_store} in
-
   Debug.debug(fun() ->
       sprintf "%sInitial State:\n{%s\n}\n\n"
       lineSep (string_of_state init_state)
   );
   let result = produces init_state precond (fresh_snap_tree ())
     (fun st ->
-      let st2 = { st with heap=[]; old_store=st.store } in
+      let st2 = { st with heap=[]; old_heap=st.heap} in
+      Debug.debug(fun()-> sprintf "St2 = %s\n" (string_of_state st2));
       produces st2 postcond (fresh_snap_tree ()) (fun _ ->
            (match proc.proc_body with
            | Some body ->
               Debug.debug (fun () -> "EXEC BODY\n");
               exec st body (fun st3 ->
+                let st3 = {st3 with old_heap=st.heap} in
                 consumes st3 postcond (fun _ _ -> Result.Ok (Forms [])))
            | None -> Result.Ok (Forms []))
       ))

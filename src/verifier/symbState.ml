@@ -578,7 +578,7 @@ let string_of_heap h =
  *)
 type symb_state = {
     store: symb_store;
-    old_store: symb_store;
+    old_heap: symb_heap;
     pc: pc_stack;
     heap: symb_heap;
     prog: program; (* need to carry around prog for prover check *)
@@ -588,7 +588,7 @@ type symb_state = {
 
 let mk_symb_state st prog contract =
   { store=st;
-    old_store=empty_store;
+    old_heap=[];
     pc=[];
     heap=[];
     prog=prog;
@@ -597,18 +597,18 @@ let mk_symb_state st prog contract =
   }
 
 
-let update_store state store old_store =
-  {state with store=store; old_store=old_store}
+let update_store state store old_heap =
+  {state with store=store; old_heap=old_heap}
 
 let update_pc state pcs =
   {state with pc=pcs}
 
 let string_of_state s =
   let store = string_of_symb_store s.store in
-  let old_store = string_of_symb_store s.old_store in
+  let old_heap= string_of_heap s.old_heap in
   let pc = string_of_pc_stack s.pc in
   let heap = string_of_heap s.heap in
-  sprintf "\n\tStore: %s,\n\tOld Store: %s\n\tPCStack: %s\n\tHeap: %s" store old_store pc heap
+  sprintf "\n\tStore: %s\n\tPCStack: %s\n\tHeap: %s\n\tOld Heap: %s" store pc heap old_heap 
 
 let string_of_states ss =
   ss
@@ -625,8 +625,8 @@ let merge_lsts h1 h2 =
 
 let merge_states s1 s2 = 
  { store=s1.store;
-   old_store=s1.old_store;
    heap=merge_lsts s1.heap s2.heap;
+   old_heap=s1.old_heap;
    pc=merge_lsts s1.pc s2.pc;
    prog=s1.prog (* programs are the same *);
    contract=s1.contract (* procs are the same *);

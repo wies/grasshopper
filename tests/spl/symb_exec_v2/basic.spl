@@ -87,7 +87,6 @@ struct DNode {
   var data: Int;
 }
 
-/*
 procedure loop1(x: DNode)
   requires acc(x.data) &*& x.data == 0
   ensures acc(x.data) &*& x.data == 10
@@ -104,7 +103,6 @@ procedure loop1(x: DNode)
   }
 }
 
-*/
 struct Node {
   var next: Node;
 }
@@ -119,3 +117,11 @@ procedure if3(x: Node, y: Node)
   y.next := x;
 }
 
+procedure old1(x: Node, y: Node)
+  requires acc(x.next) &*& acc(y.next)
+  ensures acc(x.next) &*& x.next == old(y.next) &*& acc(y.next) &*& y.next == old(x.next)
+{
+  var z := x.next;
+  x.next := y.next;
+  y.next := z;
+}
