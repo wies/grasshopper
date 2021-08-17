@@ -144,9 +144,11 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
         fc state i
   | App (Null, [], srt) as t -> fc state t
   | App (Old, [ts], srt) ->
+      (* TODO: move f_snap inj func application to consume where we 
+       * pull the snapshot from the hc*)
      let state2 = {state with heap=state.old_heap} in
      eval_term state2 ts (fun state2' ts' ->
-       fc {state2' with heap=state.heap} (mk_f_snap srt ts'))
+       fc {state2' with heap=state.heap} ts')
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (Ite, [cond; e1; e2], srt) ->
       Debug.debug(fun () -> sprintf "cond %s\n" (string_of_term cond)); 
