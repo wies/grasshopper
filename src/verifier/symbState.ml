@@ -441,7 +441,12 @@ let infer_diseq heap stack =
       match lst with
       | Some l -> IdMap.add fld_id (t :: l) m
       | None -> IdMap.add fld_id [t] m)
-    IdMap.empty heap
+    IdMap.empty (List.filter
+      (fun hc -> 
+        match hc with
+        | Obj (_, _, _) -> true
+        | ObjPred (_, _, _) -> false)  
+      heap)
   in
   IdMap.fold (fun _ lst acc ->
     if List.length lst > 1 then

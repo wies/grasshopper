@@ -42,7 +42,6 @@ procedure test_frame(x: Node, y: Node, z1: Node, z2: Node)
   x.next := z2;
 }
 
-
 procedure reverse(lst: Node) 
   returns (rev: Node)
   requires lseg(lst, null)
@@ -55,9 +54,49 @@ procedure reverse(lst: Node)
     invariant lseg(rev, null)
     invariant lseg(curr, null)
   {
+    unfold lseg(rev, null);
     var tmp := curr;
     curr := curr.next;
     tmp.next := rev;
     rev := tmp;
+    fold lseg(rev, null);
+  }
+  fold lseg(lst, null);
+}
+
+function length(x: Node, y: Node) returns (res: Int)
+  requires lseg(x, y)
+  ensures x == y ==> res == 0
+  ensures res >= 0
+{
+  unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y)
+}
+
+procedure concat(x: Node, y: Node)
+  returns (z: Node)
+  requires lseg(x, null) &*& lseg(y, null)
+  ensures lseg(z, null)
+  ensures z == (x == null ? y : x)
+  ensures length(z, null) == old(length(x, null) + length(y, null))
+{
+  if (x == null) {
+    return y;
+  } else {
+    unfold lseg(x, null); // x != null &*& acc(x.next) &*& lseg(x.next, null) &*& lseg(y, null)
+    if (x.next == null) {
+      unfold lseg(x.next, null);
+      x.next := y;
+      // with unfold lseg(x.next, null) :
+      // x != null &*& x.next == y &*& acc(x.next) &*& old(x.next) == null &*& emp &*& lseg(y, null)
+      // without unfold lseg(x.next, null) :
+      // x != null &*& x.next == y &*& acc(x.next) &*& lseg(old(x.next), null) &*& lseg(y, null)
+      fold lseg(x, null); // lseg(x, null) &*& lseg(old(x.next), null)   for tight semantics.
+      return x;
+    } else {
+      var z1 := concat(x.next, y);
+      //x.next := z1;
+      fold lseg(x, null);
+      return x;
+    }
   }
 }
