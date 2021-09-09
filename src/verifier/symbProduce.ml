@@ -15,21 +15,21 @@ let produce_symb_form state f snp (fc: symb_state -> vresult) =
   in
   fc s3
 
-let rec produce_symb_forms state fs snp (fc: symb_state -> vresult) =
+and produce_symb_forms state fs snp (fc: symb_state -> vresult) =
   match fs with
   | [] -> fc state
   | hd :: fs' ->
       produce_symb_form state hd snp (fun state' ->
         produce_symb_forms state' fs' snp fc)
 
-let produce_form state (f: Grass.form) snp (fc: symb_state -> vresult) =
+and produce_form state (f: Grass.form) snp (fc: symb_state -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sProduce Form: %s\n Current State:\n{%s\n}\n\n"
     lineSep (string_of_form f) (string_of_state state));
   eval_form state f (fun state' f' -> 
     produce_symb_form state' f' snp fc)
 
-let rec produce_sl_forms state (fs: Sl.form list) snps (fc: symb_state -> vresult) =
+and produce_sl_forms state (fs: Sl.form list) snps (fc: symb_state -> vresult) =
   match fs, snps with
   | [], [] -> fc state
   | hd :: fs', s :: snps' ->
@@ -71,7 +71,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
       produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
 
-let rec produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
+and produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
   match fs with
   | [] -> fc state
   | hd :: fs' ->
@@ -98,19 +98,22 @@ and produce_sl_symb_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
         produce_sl_symb_forms state fs snp fc
   | _ -> todo "add cases for produce_sl_symb_form"
 
-let produce state sf snp (fc: symb_state -> vresult) =
+and produce state sf snp (fc: symb_state -> vresult) =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
   | Prog.SL slf -> produce_sl_form state slf snp fc
 
-let produce_symb state sf snp (fc: symb_state -> vresult) : vresult =
+and eval_term state t (fc: symb_state -> term -> vresult) =
+  eval_term_impl state t produce fc
+
+and produce_symb state sf snp (fc: symb_state -> vresult) : vresult =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc
   | Prog.SL slf -> produce_sl_symb_form state slf snp fc
 
 (** produce_specs is the entry point for producing an assertion list (spec list),
     this function iterates over the assns calling produce_spec_form on each spec. *)
-let rec produces state (assns: Prog.spec list) snp fc : vresult =
+and produces state (assns: Prog.spec list) snp fc : vresult =
   match assns with
   | [] -> fc state
   | hd :: assns' -> produce state hd.spec_form snp (fun state' -> produces state' assns' snp fc) 

@@ -67,17 +67,17 @@ let subst_spec_list_formals state sl pred args =
 
 (** eval_terms evaluates a term list element-wise using the eval
   functions below, accumulating the resulting symbolic terms into the symb_ts list. *)
-let rec eval_terms state (ts: term list) (fc: symb_state -> term list -> vresult) =
+let rec eval_terms_impl state (ts: term list) f_produce (fc: symb_state -> term list -> vresult) =
   let rec eeval state tts ts fc =
     match tts with
     | [] -> fc state (List.rev ts) (* reverse due to the cons op below *)
     | hd :: ts' ->
-        eval_term state hd (fun state' t ->
+        eval_term_impl state hd f_produce (fun state' t ->
           eeval state' ts' (t :: ts) fc)
   in
   eeval state ts [] fc
 
-and eval_term state t (fc: symb_state -> term -> vresult) =
+and eval_term_impl state t f_produce (fc: symb_state -> term -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval Term: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_term t) (string_of_state state));
@@ -92,7 +92,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
       Debug.debug(fun () -> sprintf "field read sort (%s)\n" (string_of_sort srt));
       (match map with
       | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
-          eval_term state t (fun state' t' ->
+          eval_term_impl state t f_produce (fun state' t' ->
             let hc = heap_find_by_field_id state.pc state.heap state.prog t' id in
             Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
             let v = get_heap_chunk_snap hc in 
@@ -102,13 +102,13 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
   | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq 
           | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
-      eval_term state t1 (fun state1 t3 ->
-        eval_term state1 t2 (fun state2 t4 ->
+      eval_term_impl state t1 f_produce (fun state1 t3 ->
+        eval_term_impl state1 t2 f_produce (fun state2 t4 ->
           fc state2 (App (sym, [t3; t4], srt))))
   | App (Length, [t], srt) -> todo "eval Length"
   | App (ArrayCells, [t], srt) -> todo "eval ArrayCells"
   | App (SetEnum, [t], srt) ->
-    eval_term state t (fun state' t' -> fc state' (mk_f_snap srt t'))
+    eval_term_impl state t f_produce (fun state' t' -> fc state' (mk_f_snap srt t'))
   | App (SetEnum, ts, srt) -> todo "set enum non-singleton"
   | App (Destructor d, [t], srt) -> todo "eval Destructor"
   | App (FreeSym id1, [], srt1) -> 
@@ -129,7 +129,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
       fc state t
   | App (FreeSym id, ts, srt1) ->
       Debug.debug(fun() -> sprintf "FreeSym ts (%s) srt: %s\n" (string_of_term_list ts) (string_of_sort srt1));
-      eval_terms state ts (fun st' ts' ->
+      eval_terms_impl state ts f_produce (fun st' ts' ->
         let precond = 
           fold_spec_list
             mk_sep_star (mk_atom Emp []) (Prog.precond_of_pred (IdMap.find id state.prog.prog_preds))
@@ -147,15 +147,15 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
       (* TODO: move f_snap inj func application to consume where we 
        * pull the snapshot from the hc*)
      let state2 = {state with heap=state.old_heap} in
-     eval_term state2 ts (fun state2' ts' ->
+     eval_term_impl state2 ts f_produce (fun state2' ts' ->
        fc {state2' with heap=state.heap} ts')
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (Ite, [cond; e1; e2], srt) ->
-      eval_term state cond (fun state2 cond' ->
+      eval_term_impl state cond f_produce (fun state2 cond' ->
         join state2 (fun state3 q_join ->
           branch state3 (Atom (cond', [])) 
-            (fun state3' -> eval_term state3' e1 q_join)
-            (fun state3' -> eval_term state3' e2 q_join))
+            (fun state3' -> eval_term_impl state3' e1 f_produce q_join)
+            (fun state3' -> eval_term_impl state3' e2 f_produce q_join))
         (fun state3 v -> 
           match v with
           | [([Atom (e1', _)], e2'); ([_], e3')] ->
@@ -167,8 +167,8 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
               in
             failwith "die"))
   | App (Unfolding, [App(FreeSym id, args, Bool); in_term], srt) -> 
+      let state1 = incr_pred_cycle state id in
       if count_cycles state < rec_unfolding_limit then
-        let state1 = incr_pred_cycle state id in
         let pred = IdMap.find id state1.prog.prog_preds in
         let formals = formals_of_pred pred in
         let formal_terms =
@@ -179,7 +179,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
               Grass.Var (var, srt.var_sort) :: acc)
             [] (formals)
         in
-        eval_terms state1 formal_terms (fun state2 ts' ->
+        eval_terms_impl state1 formal_terms f_produce (fun state2 ts' ->
           (* body[xs -> ts']*)
           let sm = 
             List.combine formals ts'
@@ -191,12 +191,12 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
             | None -> failwith "Unfolding on empty preds not allowed"
           in
          (* let acc_pred = mk_heap_chunk_obj_pred id ts' (fresh_snap) in*) 
-          consume state2 bdy.spec_form (fun state3 snap ->
+          consume state2 bdy.spec_form f_produce (fun state3 snap ->
             join_prime state3 (fun state4 q_join -> 
-                produce state4 bdy.spec_form snap (fun state5 ->
-                  eval_term in_term (fun state6 in_term' ->
+                f_produce state4 bdy.spec_form snap (fun state5 ->
+                  eval_term_impl state5 in_term f_produce (fun state6 in_term' ->
                     let state6' = {state6 with heap=state2.heap} in
-                    q_join state6')))))
+                    q_join state6' in_term'))) fc))
       else
         let id = fresh_ident "recunf" in
         let recunf = mk_free_app (sort_of in_term) id state1.qvs in
@@ -214,25 +214,6 @@ and eval_forms state (fs: form list) (fc: symb_state -> form list -> vresult) =
           eeval state' ffs' (f :: symb_fs) fc)
   in
   eeval state fs [] fc
-
-and eval_form_2 state f (fc: symb_state -> form -> vresult) =
-  Debug.debug(fun() ->
-    sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
-    lineSep (string_of_form f) (string_of_state state));
-  match f with
-  | Atom (t, a) -> 
-    Debug.debug(fun () ->
-      sprintf "***** Atom \n");
-      eval_term state t (fun state' t' ->
-        fc state' (Atom ((mk_f_snap (sort_of t') t'), a)))
-  | BoolOp (op, fs) ->
-    Debug.debug(fun () ->
-      sprintf "***** BoolOp\n");
-    eval_forms state fs (fun state' fs' ->
-      fc state' (BoolOp (op, fs')))
-  | Binder (binder, [], f, a) -> fc state (Binder (binder, [], f, a))
-  | Binder (binder, ts, f, _) -> todo "eval binder catch all"
-
 
 and eval_form state f (fc: symb_state -> form -> vresult) =
   Debug.debug(fun() ->
@@ -301,7 +282,7 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> vresult) =
       eval_form state ff (fun state' ff' ->
         fc state' (Sl.Pure (ff', pos)))
   | Sl.Atom (symb, ts, pos) -> 
-      eval_terms state ts (fun state' ts' ->
+      eval_terms_impl state ts (fun state' ts' ->
         fc state' (Sl.Atom (symb, ts', pos)))
   | Sl.SepOp (sop, f1, f2, pos) ->
       eval_sl_form state f1 (fun state2 f3 ->
