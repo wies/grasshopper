@@ -215,7 +215,7 @@ let convert oc cu =
         fprintf ppf "/* ERROR: New expression only allowed directly within an Assign or Free stmt. */"
       | ((Emp _|Setenum _|PredApp _| 
         Binder _| Annot _ | Write _ |
-        ConstrApp _ | DestrApp _), _) ->
+        ConstrApp _ | Unfolding _ | DestrApp _), _) ->
         fprintf ppf "/* ERROR: expression type not yet implemented. */"
     in
     let rec pr_c_stmt ppf = 
@@ -343,7 +343,7 @@ let convert oc cu =
         )
         | BinaryOp _ -> fprintf ppf "/* ERROR: freeing the result of binary operation will possibly be implemented in the future for freeing Sets. */" 
         | (Null _ | Emp _ | Setenum _ | IntVal _ | BoolVal _ | PredApp _ | Binder _
-        | UnaryOp _ | Annot _ | Write _ | Ite _ | ConstrApp _ | DestrApp _) ->
+        | UnaryOp _ | Annot _ | Write _ | Ite _ | ConstrApp _ | Unfolding _ | DestrApp _) ->
             fprintf ppf "/* ERROR: expression cannot be disposed */"
       in 
       (** Because SPL allows multiple return variables but C does not, yet in

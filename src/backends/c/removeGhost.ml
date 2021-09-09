@@ -79,6 +79,7 @@ let removeGhost cu =
       else
         Ident (id, p)
     | Annot (expr, annots, p) -> Annot ((process_expr scope expr), annots, p)
+    | Unfolding (id, exprs, expr, p) -> process_expr scope expr
 
   and process_args current_scope callee formals expr =
     let nonImplicit = List.filter (fun v -> not (is_implicit callee v)) formals in

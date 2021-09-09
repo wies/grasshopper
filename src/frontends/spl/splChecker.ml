@@ -295,6 +295,8 @@ let resolve_names cu =
           PredApp (sym, List.map (re locals tbl) args, pos)
       | UnaryOp (op, e, pos) ->
           UnaryOp (op, re locals tbl e, pos)
+      | Unfolding (id, args, e, pos) ->
+          Unfolding (id, List.map (re locals tbl) args, re locals tbl e, pos)
       | BinaryOp (e1, op, e2, ty, pos) ->
           BinaryOp (re locals tbl e1, op, re locals tbl e2, ty, pos)
       | Ident (init_id, pos) ->
@@ -600,6 +602,10 @@ let flatten_exprs cu =
         let map1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals map in
         let idx1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals idx in
         Read (map1, idx1, pos), aux2, new_locals
+    | Unfolding (id, args, e, pos) ->
+        let args1, aux1, new_locals = flatten_expr_list ~flatten_bool:true scope aux new_locals locals args in
+        let e1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals e in
+        Unfolding (id, args1, e1, pos), aux2, new_locals
     | Write (map, idx, upd, pos) ->
         let map1, aux1, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux new_locals locals map in
         let idx1, aux2, new_locals = flatten_expr ~flatten_bool:flatten_bool scope aux1 new_locals locals idx in

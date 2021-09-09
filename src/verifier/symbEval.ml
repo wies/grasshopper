@@ -10,6 +10,9 @@ open SymbBranch
 open SymbConsume
 open SlUtil 
 
+(* maximum depth recursive predicates will be unfolded *)
+let rec_unfolding_limit = 1
+
 (* Extract the formal input parameter identifiers of a procedure foo in program prog *)
 let formal_ids_of foo prog =
   let foo_contr =(find_proc prog foo).proc_contract in 
@@ -18,7 +21,6 @@ let formal_ids_of foo prog =
 let formal_ids_of_pred foo pred =
   let foo_contr =(find_pred pred foo).pred_contract in 
   foo_contr.contr_formals
-
 
 let precond_of foo prog =
   (find_proc prog foo).proc_contract.contr_precond
@@ -91,9 +93,6 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
       (match map with
       | (App (FreeSym id, [], srt1) | Var (id, srt1)) ->
           eval_term state t (fun state' t' ->
-            Debug.debug(fun () -> sprintf "tprime (%s)\n" (string_of_term t'));
-            Debug.debug(fun () -> sprintf "tprime srt (%s)\n" (string_of_sort (sort_of t'))); 
-            Debug.debug(fun () -> sprintf "srt1 (%s)\n" (string_of_sort srt1)); 
             let hc = heap_find_by_field_id state.pc state.heap state.prog t' id in
             Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
             let v = get_heap_chunk_snap hc in 
@@ -101,7 +100,8 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
       | _ -> todo "map catch all")
   | App (Read, map :: t :: ts, srt) -> todo "eval read"
   | App (Write, [map; t1; t2], srt) -> todo "eval write"
-  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
+  | App ((Minus | Plus | Mult | Div | Mod | Diff | Inter | Union | Eq 
+          | SubsetEq | LtEq | GtEq | Lt | Gt | Elem | AndTerm | OrTerm as sym), [t1; t2], srt) ->
       eval_term state t1 (fun state1 t3 ->
         eval_term state1 t2 (fun state2 t4 ->
           fc state2 (App (sym, [t3; t4], srt))))
@@ -151,11 +151,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
        fc {state2' with heap=state.heap} ts')
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (Ite, [cond; e1; e2], srt) ->
-      Debug.debug(fun () -> sprintf "cond %s\n" (string_of_term cond)); 
-      Debug.debug(fun () -> sprintf "e1 %s\n" (string_of_term e1)); 
-      Debug.debug(fun () -> sprintf "e2 %s\n" (string_of_term e2)); 
       eval_term state cond (fun state2 cond' ->
-        Debug.debug(fun () -> sprintf "Calling join\n");
         join state2 (fun state3 q_join ->
           branch state3 (Atom (cond', [])) 
             (fun state3' -> eval_term state3' e1 q_join)
@@ -164,14 +160,47 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
           match v with
           | [([Atom (e1', _)], e2'); ([_], e3')] ->
           (* look at what form e1' and see if it's singleton term Bool. *)
-            Debug.debug(fun () -> sprintf "e1 JOIN %s\n" (string_of_term e1')); 
             fc state3 (App (Ite, [e1'; e2'; e3'], srt))
           | ll ->
               let _ = List.map (fun (fs, ts) ->
               Debug.debug(fun () -> sprintf "(fs: %s, ts: %s)\n" (string_of_forms fs) (string_of_term ts))) ll
               in
             failwith "die"))
-
+  | App (Unfolding, [App(FreeSym id, args, Bool); in_term], srt) -> 
+      if count_cycles state < rec_unfolding_limit then
+        let state1 = incr_pred_cycle state id in
+        let pred = IdMap.find id state1.prog.prog_preds in
+        let formals = formals_of_pred pred in
+        let formal_terms =
+          let locs = Prog.locals_of_pred pred in
+          List.fold_left
+            (fun acc var ->
+              let srt = Grass.IdMap.find var locs in
+              Grass.Var (var, srt.var_sort) :: acc)
+            [] (formals)
+        in
+        eval_terms state1 formal_terms (fun state2 ts' ->
+          (* body[xs -> ts']*)
+          let sm = 
+            List.combine formals ts'
+            |> List.fold_left (fun sm (id, t) -> IdMap.add id t sm) IdMap.empty 
+          in
+          (* use subst_spec in prog.ml  on the body.*)
+          let bdy = match pred.pred_body with
+            | Some b -> subst_spec sm b
+            | None -> failwith "Unfolding on empty preds not allowed"
+          in
+         (* let acc_pred = mk_heap_chunk_obj_pred id ts' (fresh_snap) in*) 
+          consume state2 bdy.spec_form (fun state3 snap ->
+            join_prime state3 (fun state4 q_join -> 
+                produce state4 bdy.spec_form snap (fun state5 ->
+                  eval_term in_term (fun state6 in_term' ->
+                    let state6' = {state6 with heap=state2.heap} in
+                    q_join state6')))))
+      else
+        let id = fresh_ident "recunf" in
+        let recunf = mk_free_app (sort_of in_term) id state1.qvs in
+        fc state1 recunf 
   | App (symb, ts, srt) -> todo "eval_term catch all"
 
 (** eval_forms evaluates a formula list fs element-wise using the eval

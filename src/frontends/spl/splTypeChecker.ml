@@ -135,6 +135,7 @@ let type_of_expr cu locals e =
     (* Set return values *)
     | BinaryOp (e, OpDiff, _, _, _)
     | BinaryOp (e, OpUn, _, _, _)
+    (* Unfolding should produce the type of the in expr*)
     | BinaryOp (e, OpInt, _, _, _) ->
         te e
     | Binder (Comp, [v], e, _) ->
@@ -415,6 +416,9 @@ let infer_types cu locals ty e =
         let ty1 = match_types cu pos ty nty in
         New (ty1, es1, pos), ty1
     | UnaryOp ((OpOld | OpKnown as op), e, pos) ->
+        (* checks recursively in e and checks the does type checking and returns the e1 with annotated types *)
+        (* ty1 is the type is what e should be*)
+        (* so for Unfolding mash this together with what we did with PredApp *)
         let e1, ty1 = it locals ty e in
         UnaryOp(op, e1, pos), ty1
     | UnaryOp (OpLength, map, pos) ->
@@ -567,6 +571,49 @@ let infer_types cu locals ty e =
           let e2, _ = it locals set_ty e2 in
           PredApp (DisjointPred, [e1; e2], pos), match_types cu pos ty BoolType
       | _ -> pred_arg_mismatch_error pos ("Disjoint", 0) 2)
+    | Unfolding (id, es, e, pos) ->
+        let decl = IdMap.find id cu.pred_decls in
+        let ftys =
+          List.map
+            (fun fid -> (IdMap.find fid decl.pr_locals).v_type)
+            decl.pr_formals
+        in
+        let es1, rftys, res =
+          Util.map2_remainder (fun ty e -> fst (it locals ty e)) ftys es
+        in
+        let arg_error num_args =
+          match ty with
+          | PermType | BoolType ->
+              pred_arg_mismatch_error pos id num_args
+          | _ ->
+              fun_arg_mismatch_error pos id num_args
+        in
+        (* Check whether number of actual arguments is correct *)
+        let _ = 
+          match ty, rftys, res with
+          | PermType, _ :: _, [] ->
+              if List.length es1 <> List.length decl.pr_formals then
+                arg_error (List.length decl.pr_formals)
+          | _, _ :: _, _ | _, _, _ :: _ ->
+              arg_error (List.length ftys)
+          | _ -> ()
+        in
+        (* Check whether return type matches expected type *)
+        let rty =
+          match decl.pr_outputs with
+          | [rid] -> 
+              let rdecl = IdMap.find rid decl.pr_locals in
+              match_types cu pos ty rdecl.v_type
+          | _ ->
+              let body_ty =
+                decl.pr_body |>
+                Opt.map (type_of_expr cu locals) |>
+                Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
+              in
+              match_types cu pos ty body_ty
+        in
+        let e1, ty1 = it locals ty e in
+        Unfolding (id, es1, e1, pos), ty1
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in
         let formals = List.filter (fun p -> not (IdMap.find p decl.p_locals).v_implicit) decl.p_formals in

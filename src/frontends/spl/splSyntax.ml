@@ -181,6 +181,7 @@ and expr =
   | BinaryOp of expr * bin_op * expr * typ * pos
   | Ident of ident * pos
   | Annot of expr * annotation * pos
+  | Unfolding of ident * exprs * expr * pos
 
 and exprs = expr list
 
@@ -425,6 +426,8 @@ let rec pr_expr ppf =
             (pr_binder b) (Util.pr_list_comma pr_bound_var) vs pr_expr e
       )
   | Annot (e, _, _) -> pr_expr ppf e
+  | Unfolding (id, args, e, _) ->
+      fprintf ppf "unfolding %a(@[%a@]) in %a" pr_ident id pr_expr_list args pr_expr e
 
 and pr_expr_list es = Util.pr_list_comma pr_expr es
     
@@ -549,7 +552,7 @@ let rec pr_stmt ppf =
       fprintf ppf "fold %a(@[%a@])" pr_ident id pr_expr_list es
   | Unfold (id, es, _) ->
       fprintf ppf "unfold %a(@[%a@])" pr_ident id pr_expr_list es
-
+  
 and pr_stmt_list sts = Util.pr_list_nl pr_stmt sts 
 
 and pr_choice ppf = function
@@ -649,7 +652,8 @@ let pos_of_expr = function
   | UnaryOp (_, _, p)
   | BinaryOp (_, _, _, _, p)
   | Ident (_, p)
-  | Annot (_, _, p) -> p
+  | Annot (_, _, p)
+  | Unfolding (_, _, _, p) -> p
 
 let free_vars e =
   let rec fv bv acc = function
@@ -1142,6 +1146,8 @@ let replace_macros prog =
       Binder (b, vs, repl_expr e, pos)
     | UnaryOp (op, e, pos) ->
       UnaryOp (op, repl_expr e, pos)
+    | Unfolding (id, es, e, pos) ->
+        Unfolding (id, List.map (repl_expr) es, repl_expr e, pos)
     | BinaryOp (e1, op, e2, ty, pos) ->
       BinaryOp (repl_expr e1, op, repl_expr e2, ty, pos)
     | Annot (e, a, pos) ->

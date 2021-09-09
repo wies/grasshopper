@@ -65,6 +65,7 @@ let _ =
       ("true", BOOLVAL(true));
       ("type", TYPE);
       ("unfold", UNFOLD);
+      ("unfolding", UNFOLDING);
       ("var", VAR);
       ("while", WHILE);
       ("with", WITH);

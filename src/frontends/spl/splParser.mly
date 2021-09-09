@@ -61,7 +61,7 @@ type rhs_string_maybe =
 %token PTS EMP NULL
 %token SEPSTAR SEPPLUS SEPINCL AND OR IMPLIES IFF NOT COMMA
 %token <SplSyntax.binder_kind> QUANT
-%token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN FOLD UNFOLD
+%token ASSUME ASSERT SPLIT CALL FREE HAVOC NEW RETURN FOLD UNFOLD UNFOLDING
 %token IF ELSE WHILE
 %token <bool> FUNCTION
 %token <bool> PREDICATE
@@ -593,10 +593,8 @@ stmt_wo_trailing_substmt:
 }
 /* fold */
 | FOLD IDENT LPAREN expr_list RPAREN SEMICOLON { Fold ($2, $4, mk_position 1 6) }
-
 /* unfold */
 | UNFOLD IDENT LPAREN expr_list RPAREN SEMICOLON { Unfold ($2, $4, mk_position 1 6) }
-
 /* return */
 | RETURN expr_list_opt SEMICOLON { 
   Return ($2, mk_position 1 3)
@@ -949,6 +947,10 @@ simple_bound_var:
   }
 ;
 
+unfolding_expr:
+| UNFOLDING IDENT LPAREN expr_list_opt RPAREN IN expr SEMICOLON { Unfolding ($2, $4, $7, mk_position 1 8) }
+;
+
 quant_var_list:
 | COMMA quant_var quant_var_list { $2 :: $3 }
 | /* empty */ { [] }
@@ -965,6 +967,7 @@ quant_expr:
 
 expr:
 | quant_expr { $1 } 
+| unfolding_expr { $1 }
 ;
 
 expr_list_opt:

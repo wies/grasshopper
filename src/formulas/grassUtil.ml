@@ -359,6 +359,10 @@ let mk_ite c t e = mk_app (sort_of t) Ite [c; t; e]
 
 let mk_null id = mk_app (Loc id) Null []
 
+let mk_unfolding id args t = mk_app (sort_of t) Unfolding [
+  mk_free_fun Bool id args;
+  t]
+
 let mk_read map = function
   | [] -> map
   | inds ->

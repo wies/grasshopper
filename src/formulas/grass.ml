@@ -96,6 +96,8 @@ type symbol =
   | Old      
   (* for patterns *)
   | Known
+  (* unfolding expressions *)
+  | Unfolding
 
 type sorted_symbol = symbol * arity
       
@@ -299,6 +301,7 @@ let string_of_symbol = function
   (* model values *)
   | Value i -> Printf.sprintf "!%d" (Int64.to_int i)
   | Undefined -> "undefined"
+  | Unfolding -> "unfolding"
         
 let string_of_bop = function
   | And -> "&&"
@@ -322,6 +325,7 @@ let prio_of_symbol = function
   | AndTerm -> 12
   | OrTerm -> 16
   | Ite -> 17
+  | Unfolding -> 18
 
 let prio_of_term = function
   | App (sym, _, _) -> prio_of_symbol sym

@@ -336,6 +336,7 @@ let rec mk_bool_form t =
    | AndTerm -> And
    | OrTerm -> Or
    | NotTerm -> Not
+   | _ -> failwith "only convert for And/Or/Not"
  in
  match t with
  | App((AndTerm | OrTerm | NotTerm) as op, ts, _) 
@@ -589,6 +590,7 @@ type symb_state = {
     prog: program; (* need to carry around prog for prover check *)
     contract: contract;
     qvs: term list;
+    visited_preds: ident list;
   }
 
 let mk_symb_state st prog contract =
@@ -599,8 +601,24 @@ let mk_symb_state st prog contract =
     prog=prog;
     contract=contract;
     qvs=[];
+    visited_preds=[];
   }
 
+let incr_pred_cycle state id =
+  {state with visited_preds=id :: state.visited_preds}
+
+let rem_pred_cycle state id =
+  {state with
+   visited_preds=(List.filter
+    (fun i -> i != id)
+    state.visited_preds)
+  }
+
+let count_cycles state =
+  List.fold_left
+    (fun acc _ -> acc + 1)
+    0
+    state.visited_preds
 
 let update_store state store old_heap =
   {state with store=store; old_heap=old_heap}
@@ -636,4 +654,5 @@ let merge_states s1 s2 =
    prog=s1.prog (* programs are the same *);
    contract=s1.contract (* procs are the same *);
    qvs=merge_lsts s1.qvs s2.qvs;
+   visited_preds=s1.visited_preds @ s2.visited_preds;
  }

@@ -44,7 +44,6 @@ let rec consume_sl_symb_form_impl state heap (f: Sl.form) f_eval_form f_eval_ter
        let hc = heap_find_by_field_id state'.pc state'.heap state'.prog obj' id in
         Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
         let h' = heap_remove state'.heap state'.pc hc in 
-
         fc {state' with heap=h'} h' (get_heap_chunk_snap hc))
   | Sl.Atom (Sl.Region, ts, _) -> todo "region ts" 
   | Sl.Atom (Sl.Pred id, ts, _) -> 

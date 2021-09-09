@@ -274,6 +274,10 @@ let convert cu =
     | UnaryOp (OpArrayCells, e, pos) ->
         let t = convert_term locals e in
         GrassUtil.mk_array_cells t
+    | Unfolding (id, args, e, pos) ->
+        let ts = List.map (convert_term locals) args in
+        let t2 = convert_term locals e in
+        GrassUtil.mk_unfolding id ts t2 
     | PredApp (Pred id, es, pos) ->
         let decl = 
           IdMap.find_opt id cu.pred_decls |>

@@ -498,8 +498,10 @@ let subst_spec sm sf =
       { sf with 
         spec_form = FOL (subst_consts sm f);
       }
-  | SL _ -> failwith "elim_assign: found SL formula that should have been desugared."
-
+  | SL ssf ->
+      { sf with 
+        spec_form = SL (SlUtil.subst_consts sm ssf);
+      }
         
 let old_prefix = "$old_"
 
