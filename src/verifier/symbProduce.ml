@@ -106,6 +106,9 @@ and produce state sf snp (fc: symb_state -> vresult) =
 and eval_term state t (fc: symb_state -> term -> vresult) =
   eval_term_impl state t produce fc
 
+and eval_form state f (fc: symb_state -> term -> vresult) =
+  eval_form_impl state f produce fc
+
 and produce_symb state sf snp (fc: symb_state -> vresult) : vresult =
   match sf with
   | Prog.FOL fol -> produce_form state fol snp fc

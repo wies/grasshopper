@@ -205,17 +205,17 @@ and eval_term_impl state t f_produce (fc: symb_state -> term -> vresult) =
 
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
-and eval_forms state (fs: form list) (fc: symb_state -> form list -> vresult) =
+and eval_forms_impl state (fs: form list) f_produce (fc: symb_state -> form list -> vresult) =
   let rec eeval state ffs symb_fs fc =
     match ffs with
     | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
     | hd :: ffs' ->
-        eval_form state hd (fun state' f ->
+        eval_form_impl state hd f_produce (fun state' f ->
           eeval state' ffs' (f :: symb_fs) fc)
   in
   eeval state fs [] fc
 
-and eval_form state f (fc: symb_state -> form -> vresult) =
+and eval_form_impl state f f_produce (fc: symb_state -> form -> vresult) =
   Debug.debug(fun() ->
     sprintf "%sEval Form: %s\n State:\n{%s\n}\n\n"
     lineSep (string_of_form f) (string_of_state state));
@@ -223,43 +223,43 @@ and eval_form state f (fc: symb_state -> form -> vresult) =
   | Atom (t, a) -> 
     Debug.debug(fun () ->
       sprintf "***** Atom \n");
-      eval_term state t (fun state' t' ->
+      eval_term_impl state t f_produce (fun state' t' ->
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->
     Debug.debug(fun () ->
       sprintf "***** BoolOp\n");
-    eval_forms state fs (fun state' fs' ->
+    eval_forms_impl state fs f_produce (fun state' fs' ->
       fc state' (BoolOp (op, fs')))
   | Binder (binder, [], f, a) -> 
       Debug.debug(fun() -> "*** BINDER\n");
-      eval_form state f (fun state' f' ->
+      eval_form_impl state f f_produce (fun state' f' ->
         fc state (Binder (binder, [], f', a)))
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
 
 (* Handles a cyclical dependency *)
 and consumes_sf state heap (assns: Prog.spec_form list) fc =
-  consumes_sf_impl state heap assns eval_form eval_terms eval_term fc
+  consumes_sf_impl state heap assns eval_form_impl eval_terms eval_term fc
 
 and consume state heap (sf: Prog.spec_form) fc =
-  consume_impl state heap sf eval_form eval_terms eval_term fc
+  consume_impl state heap sf eval_form_impl eval_terms eval_term fc
 
 and consume_symb state heap (sf: Prog.spec_form) fc =
-  consume_symb_impl state heap sf eval_form eval_terms eval_term fc
+  consume_symb_impl state heap sf eval_form_impl eval_terms eval_term fc
 
 and consumes state (assns: Prog.spec list) fc =
-  consumes_impl state assns eval_form eval_terms eval_term fc
+  consumes_impl state assns eval_form_impl eval_terms eval_term fc
 
 and consumes_symb state (assns: Prog.spec list) fc =
-  consumes_symb_impl state assns eval_form eval_terms eval_term fc
+  consumes_symb_impl state assns eval_form_impl eval_terms eval_term fc
 
 and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> vresult) =
-  consume_sl_form_impl state heap f eval_form eval_terms eval_term fc
+  consume_sl_form_impl state heap f eval_form_impl eval_terms eval_term fc
 
 and consumes_sl_form state heap (fs: Sl.form list) (fc: symb_state -> symb_heap -> term -> vresult) =
-  consumes_sl_form_impl state heap fs eval_form eval_terms eval_term fc
+  consumes_sl_form_impl state heap fs eval_form_impl eval_terms eval_term fc
 
 and consume_form state heap (f: Grass.form) (fc: symb_state -> symb_heap -> term -> vresult) = 
-  consume_form_impl state heap f eval_form fc
+  consume_form_impl state heap f eval_form_impl fc
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
@@ -279,7 +279,7 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> vresult) =
     lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (ff, pos) ->
-      eval_form state ff (fun state' ff' ->
+      eval_form_impl state ff (fun state' ff' ->
         fc state' (Sl.Pure (ff', pos)))
   | Sl.Atom (symb, ts, pos) -> 
       eval_terms_impl state ts (fun state' ts' ->
@@ -295,5 +295,5 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> vresult) =
 
 let eval_spec_form state sf (fc: symb_state -> form -> vresult) =
   match sf with
-  | Prog.FOL fol -> eval_form state fol fc
+  | Prog.FOL fol -> eval_form_impl state fol fc
   | Prog.SL slf -> failwith "cannot call eval_spec_form on an sl formula"
