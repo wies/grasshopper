@@ -2,6 +2,7 @@ options "-symbexec-v2"
 
 include "../include/sllist_rec_symbexec.spl"
 
+/*
 lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
   ensures acc(x.next) &*& lseg(x.next, y)
@@ -63,6 +64,7 @@ procedure reverse(lst: Node)
   }
   fold lseg(lst, null);
 }
+*/
 
 function length(x: Node, y: Node) returns (res: Int)
   requires lseg(x, y)
