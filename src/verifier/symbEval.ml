@@ -10,59 +10,6 @@ open SymbBranch
 open SymbConsume
 open SlUtil 
 
-(* maximum depth recursive predicates will be unfolded *)
-let rec_unfolding_limit = 1
-
-(* Extract the formal input parameter identifiers of a procedure foo in program prog *)
-let formal_ids_of foo prog =
-  let foo_contr =(find_proc prog foo).proc_contract in 
-  foo_contr.contr_formals
-
-let formal_ids_of_pred foo pred =
-  let foo_contr =(find_pred pred foo).pred_contract in 
-  foo_contr.contr_formals
-
-let precond_of foo prog =
-  (find_proc prog foo).proc_contract.contr_precond
-
-let subst_spec_form subst_map sf =
-  match sf with
-  | SL slf -> SL (SlUtil.subst_consts subst_map slf)
-  | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
-
-let subst_spec_form subst_map sf =
-  match sf with
-  | SL slf -> SL (SlUtil.subst_consts subst_map slf)
-  | FOL f -> FOL (GrassUtil.subst_consts subst_map f)
-
-let pr_sspec_form_list sfl =
-  sfl
-  |> List.map (fun v -> (string_of_format pr_sspec_form v))
-  |> String.concat ", "
-  |> sprintf "[%s]"
-
-(* Substitutes identifiers of a spec list with other terms according to substitution map [subst_map]. *)
-let subst_spec_list subst_map sl =
-  List.map (fun s -> subst_spec_form subst_map s.spec_form) sl
-
-let fold_spec_list f acc specs =
-  let folded =List.fold_left (fun facc a ->
-    match a with
-    | SL slf -> mk_sep_star facc  slf
-    | FOL f -> mk_sep_star facc (mk_pure f))
-    acc (List.map (fun s -> s.spec_form) specs)
-  in
-  match specs with 
-  | [] -> []
-  | _ -> [{(List.hd (List.rev specs)) with spec_form=SL folded}]
-
-let subst_spec_list_formals state sl pred args =
-  let sm = 
-    List.combine (formal_ids_of_pred pred state.prog) args
-    |> List.fold_left (fun sm (f, a) -> IdMap.add f a sm) IdMap.empty 
-  in
-  subst_spec_list sm sl
-
 (** eval rules *)
 
 (** eval_terms evaluates a term list element-wise using the eval

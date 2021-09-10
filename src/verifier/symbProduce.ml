@@ -5,7 +5,6 @@ open SymbEval
 open SymbState
 open GrassUtil
 open Grass
-open Printf
 open Util
 
 let produce_symb_form state f snp (fc: symb_state -> vresult) =
