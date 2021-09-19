@@ -8,6 +8,7 @@ let pos_of_sl_form = function
   | SepOp (_, _, _, pos)
   | BoolOp (_, _, pos) 
   | Binder (_, _, _, pos) -> pos
+  | Ite (_, _, _, pos) -> pos
 
 let mk_loc_set struct_srt d =
   let srt = Grass.Set (Grass.Loc struct_srt) in
@@ -112,7 +113,9 @@ let mk_pts ?pos f a b =
 let mk_sep_star_lst ?pos:pos args = List.fold_left (mk_sep_star ?pos:pos) (mk_emp pos) args
 let mk_exists ?pos vs f = Binder (Grass.Exists, vs, f, pos)
 let mk_forall ?pos vs f = Binder (Grass.Forall, vs, f, pos)
+let mk_ite ?pos c f1 f2 = Ite (c, f1, f2, pos)
 
+(* the new ite would be cobining Pure + SepOp *)
 let free_symbols f = 
   let rec fsym acc = function
     | Pure (f, _) -> IdSet.union acc (GrassUtil.free_symbols f)
@@ -127,6 +130,8 @@ let free_symbols f =
           GrassUtil.free_symbols_term_acc 
           acc1 args
     | Binder (b, vs, f, _) -> fsym acc f
+    (* XXX do we do the condition first and do I need the IdSet.union here for the c Grass.form part?*)
+    | Ite (c, f1, f2, _) -> fsym (fsym (GrassUtil.free_symbols c) f1) f2
   in
   fsym IdSet.empty f
 
@@ -137,6 +142,7 @@ let map_pure_and_terms ffct tfct f =
   | BoolOp (op, fs, pos) -> BoolOp (op, List.map m fs, pos)
   | SepOp (op, f1, f2, pos) -> SepOp (op, m f1, m f2, pos)
   | Binder (b, vs, f, pos) -> Binder (b, vs, m f, pos)
+  | Ite (c, f1, f2, pos) -> Ite (ffct c, m f1, m f2, pos)
   in m f
     
 let rec map_terms fct = map_pure_and_terms (GrassUtil.map_terms fct) fct
@@ -163,6 +169,7 @@ let subst_preds subst f =
     | BoolOp (op, fs, pos) -> BoolOp (op, List.map map fs, pos)
     | SepOp (op, f1, f2, pos) -> SepOp (op, map f1, map f2, pos)
     | Binder (b, vs, f, pos) -> Binder (b, vs, map f, pos)
+    | Ite (c, f1, f2, pos) -> Ite (c, map f1, map f2, pos)
     | f -> f
   in map f
 
@@ -176,6 +183,8 @@ let rec fold_terms fct acc f =
   | SepOp (_, f1, f2, _) -> fold_terms fct (fold_terms fct acc f1) f2
   | Atom (_, args, _) -> List.fold_left fct acc args
   | Pure (g, _) -> GrassUtil.fold_terms fct acc g
+  (* XXX what order do we do thes c first then work outwords?*)
+  | Ite (c, f1, f2, _) -> fold_terms fct (fold_terms fct (GrassUtil.fold_terms fct acc c) f1) f2
 
 let free_consts f =
   fold_terms GrassUtil.free_consts_term_acc IdSet.empty f
@@ -190,6 +199,8 @@ let rec fold_atoms fct acc f =
   | BoolOp (op, fs, _) -> List.fold_left (fold_atoms fct) acc fs
   | SepOp (_, f1, f2, _) -> fold_atoms fct (fold_atoms fct acc f1) f2
   | Atom _ -> fct acc f
+  (* XXX pure is a fallthrough case here so do we just do nothing for c?*)
+  | Ite (_, f1, f2, _) -> fold_atoms fct (fold_atoms fct acc f1) f2
   | _ -> acc
 
 let preds f =
@@ -215,6 +226,7 @@ let rec get_clauses f = match f with
   | other -> [other]
 
 let prenex_form f = 
+  (* XXX anything to do for Ite here? *)
   let combine acc bvs f =
     let acc_vs = 
       List.fold_left 
@@ -264,6 +276,12 @@ let prenex_form f =
         | _ -> (b, vs) :: bvs1
         in
         bvs2, f1
+    | Ite (c, f1, f2, pos) -> 
+        (* XXX passthrough c? *)
+        let bvs1, f1 = pf f1 in
+        let bvs2, f2 = pf f2 in
+        let bvs, f22 = combine bvs1 bvs2 f2 in
+        bvs, Ite(c, f1, f22, pos)
     | f -> [], f
   and pf_fs fs =
     List.fold_right 

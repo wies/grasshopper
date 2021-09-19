@@ -215,6 +215,7 @@ let elim_arrays prog =
         Sl.BoolOp (op, List.map compile_sl_form fs, pos)
     | Sl.Binder (b, vs, f, pos) ->
         Sl.Binder (b, vs, compile_sl_form f, pos)
+    | Sl.Ite _ -> failwith "unsupported Sl.Ite"
   in
   let compile_spec = Prog.map_spec_form compile_grass_form compile_sl_form in
   let rec compile_cmd = function

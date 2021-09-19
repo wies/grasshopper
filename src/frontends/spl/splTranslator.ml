@@ -529,6 +529,11 @@ let convert cu =
   in
   let rec convert_sl_form locals = function
     | Emp pos -> SlUtil.mk_emp (Some pos)
+    | Ite (e1, e2, e3, pos) ->
+        let t1 = convert_grass_form locals e1 in
+        let t2 = convert_sl_form locals e2 in
+        let t3 = convert_sl_form locals e3 in
+        SlUtil.mk_ite t1 t2 t3
     | PredApp (AccessPred, [obj; fld], pos) ->
         let t1 = convert_term locals obj in
         let t2 = convert_term locals fld in

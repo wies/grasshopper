@@ -66,12 +66,14 @@ procedure reverse(lst: Node)
 }
 */
 
+/* todo: run this through viper */
 function length(x: Node, y: Node) returns (res: Int)
   requires lseg(x, y)
   ensures x == y ==> res == 0
   ensures res >= 0
 {
-  unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y);
+ // unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y);
+ x == y ? 0 : 1 + length(x.next, y)
 }
 
 procedure concat(x: Node, y: Node)

@@ -181,6 +181,11 @@ let rec pc_after (pcs: pc_stack) scope_id =
     if sid = scope_id
     then [stack']
     else pc_after suffix scope_id
+  | (sid, bc, pcs) :: suffix ->
+    if sid = scope_id
+    then []
+    else pc_after suffix scope_id
+
 
 let pc_collect_constr (stack: pc_stack) =
   List.fold_left
@@ -354,10 +359,6 @@ let cart_prod f l1 l2 =
 let rec translate_ite f =
   (* translates terms into nested lists of pairs*)
   let rec terms_to_fpairs = function
-    | Var (_, _) | App(Undefined, [], _) | App(IntConst _, [], _)
-    | App(BoolConst _, [], _) | App(Eq, [], _)
-    | App(FreeSym _, _, _) | App(Destructor _, _, _) 
-    | App(Constructor _, _, _) as t -> [([], t)]
     | App(FreeSym id, [t], srt) ->
        let plst1 = terms_to_fpairs t in
        let l3 = cart_prod (fun x y ->
@@ -366,6 +367,10 @@ let rec translate_ite f =
        in 
        (* push the outer app into the second part of each pair*)
        List.map (fun (cnds, tt) -> (cnds, App(FreeSym id, tt, srt))) l3
+    | Var (_, _) | App(Undefined, [], _) | App(IntConst _, [], _)
+    | App(BoolConst _, [], _) | App(Eq, [], _)
+    | App(FreeSym _, _, _) | App(Destructor _, _, _) 
+    | App(Constructor _, _, _) as t -> [([], t)]
     | App(Eq, [t1; t2], srt) ->
        let plst1 = terms_to_fpairs t1 in
        let plst2 = terms_to_fpairs t2 in 
@@ -498,7 +503,7 @@ let check_entail prog p1 p2 =
 (** SMT solver calls *)
 let check pc_stack prog v =
   match check_entail prog (smk_and (pc_collect_constr pc_stack)) v  with 
-  | Result.Error err  as e -> raise_err "SMT check failed"
+  | Result.Error err -> raise_err "SMT check failed"
   | Result.Ok _ -> Result.Ok ()
 
 let check_bool pc_stack prog v =

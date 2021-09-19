@@ -104,6 +104,7 @@ let merge_types cu pos oty1 oty2 =
   * Assumes that all identifiers in [e] have been resolved. *)
 let type_of_expr cu locals e = 
   let rec te = function
+    (* Question for Th: Unfolding?*)
     (* Bool return values *)
     | UnaryOp (OpNot, _, _)
     | BinaryOp (_, OpEq, _, _, _)
@@ -572,6 +573,7 @@ let infer_types cu locals ty e =
           PredApp (DisjointPred, [e1; e2], pos), match_types cu pos ty BoolType
       | _ -> pred_arg_mismatch_error pos ("Disjoint", 0) 2)
     | Unfolding (id, es, e, pos) ->
+        (* what's the return type of Unfolding*)
         let decl = IdMap.find id cu.pred_decls in
         let ftys =
           List.map
@@ -612,7 +614,7 @@ let infer_types cu locals ty e =
               in
               match_types cu pos ty body_ty
         in
-        let e1, ty1 = it locals ty e in
+        let e1, ty1 = it locals rty e in
         Unfolding (id, es1, e1, pos), ty1
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in

@@ -390,6 +390,7 @@ let state_of_spec_list fields old_state specs : state * state =
         old_state, add (smk_binder b vs state1.pure, []) state, spatial'
       else
         failwith @@ "Confused by spatial under binder: " ^ (Sl.string_of_form f)
+    | Sl.Ite _ -> failwith "not supported in old symbExec engine"
   in
   (* Convert all the specs into a state *)
   let (old_state, state, spatial') =

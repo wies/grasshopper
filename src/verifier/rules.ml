@@ -100,6 +100,7 @@ and produce_sl_forms state (fs: Sl.form list) snps (fc: symb_state -> vresult) =
   | hd :: fs', s :: snps' ->
       produce_sl_form state hd s (fun state' ->
         produce_sl_forms state' fs' snps' fc)
+  | _ -> failwith "unreachable"
 
 and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
    Debug.debug(fun() ->
@@ -135,6 +136,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
   | Sl.Binder (b, [], f, _) ->
       produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
+  | Sl.Ite _ -> todo "ITE in consume_sl_form"
 
 and produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
   match fs with
@@ -235,6 +237,7 @@ and consume_sl_symb_form state heap (f: Sl.form) (fc: symb_state -> symb_heap ->
      fc state heap (emp_snap)
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
+  | Sl.Ite _ -> todo "ITE in consume_sl_symb_form"
 
 and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> vresult) =
   Debug.debug(fun() ->
@@ -278,6 +281,7 @@ and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term
      fc state heap (emp_snap)
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
+  | Sl.Ite _ -> todo "ITE in consume_sl_form"
 
 and consume state heap (sf: Prog.spec_form) (fc: symb_state -> symb_heap -> term -> vresult) =
   match sf with
@@ -445,8 +449,8 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
             | Some b -> subst_spec sm b
             | None -> failwith "Unfolding on empty preds not allowed"
           in
-         (* let acc_pred = mk_heap_chunk_obj_pred id ts' (fresh_snap) in*) 
-          consume state2 state2.heap bdy.spec_form (fun state3 _ snap ->
+          (* consume the acc(pred(..)) from the heap *)
+          consume_sl_form state2 state2.heap (SlUtil.mk_pred pred.pred_contract.contr_name ts') (fun state3 _ snap ->
             join_prime state3 (fun state4 q_join -> 
                 produce state4 bdy.spec_form snap (fun state5 ->
                   eval_term state5 in_term (fun state6 in_term' ->
@@ -461,11 +465,11 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
 (** eval_forms evaluates a formula list fs element-wise using the eval
   function below, accumulating the resulting formulas carrying symbolic values *)
 and eval_forms state (fs: form list) (fc: symb_state -> form list -> vresult) =
-  let rec eeval state ffs symb_fs fc =
+  let rec eeval state1 ffs symb_fs fc =
     match ffs with
-    | [] -> fc state (List.rev symb_fs) (* reverse due to the cons op below *)
+    | [] -> fc state1 (List.rev symb_fs) (* reverse due to the cons op below *)
     | hd :: ffs' ->
-        eval_form state hd (fun state' f ->
+        eval_form state1 hd (fun state' f ->
           eeval state' ffs' (f :: symb_fs) fc)
   in
   eeval state fs [] fc
@@ -482,13 +486,14 @@ and eval_form state f (fc: symb_state -> form -> vresult) =
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->
     Debug.debug(fun () ->
-      sprintf "***** BoolOp\n");
+      sprintf "***** BoolOp len f (%d)\n" (List.length fs));
     eval_forms state fs (fun state' fs' ->
+      let _ = List.map (fun f -> Debug.debug(fun () -> sprintf "***** BoolOp fs (%s)\n" (string_of_form f))) fs' in
       fc state' (BoolOp (op, fs')))
   | Binder (binder, [], f, a) -> 
       Debug.debug(fun() -> "*** BINDER\n");
       eval_form state f (fun state' f' ->
-        fc state (Binder (binder, [], f', a)))
+        fc state' (Binder (binder, [], f', a)))
   | Binder (binder, ts, f, _) -> todo "eval binder catch all"
 
 (** eval_sl_forms evaluates a sl formula list fs element-wise using the eval
@@ -522,6 +527,7 @@ and eval_sl_form state f (fc: symb_state -> Sl.form -> vresult) =
     eval_sl_forms state slfs (fun state' slfs' ->
       fc state' (Sl.BoolOp (op, slfs', pos)))
   | Sl.Binder (b, ids, slf, pos) -> todo "sl binder eval"
+  | Sl.Ite _ -> todo "ite in eval_sl_form"
 
 and eval_spec_form state sf (fc: symb_state -> form -> vresult) =
   match sf with

@@ -45,11 +45,11 @@ let branch state f fc_f fc_notf =
     pc_push_new state.pc (fresh_ident "branch") ff
   in
   let fs = (smk_and (pc_collect_constr state.pc)) in
-  Debug.debug(fun () -> sprintf "FS **** %ss\n" (string_of_form fs));
+  Debug.debug(fun () -> sprintf "FS **** %s\n" (string_of_form fs));
 
   let f2 ff =
     match check_entail state.prog fs ff with
-    | Result.Ok _ as e -> 
+    | Result.Ok _ -> 
         Debug.debug(fun () -> "check_entail f INFEASABLE\n");
         Result.Ok (Forms [])
     | Result.Error _ -> 
@@ -108,6 +108,7 @@ let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vres
 let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
   join state fc_branch (fun state' bcs ->
     (* the sort of w should be the same *)
+    Debug.debug(fun () -> sprintf "join in join_prime, bcs len (%d)\n" (List.length bcs));
     let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (mk_ident "joinFn") (state'.qvs) in
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 

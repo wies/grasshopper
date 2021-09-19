@@ -375,6 +375,7 @@ let verify_pred spl_prog prog aux_axioms pred =
       Debug.debug (fun () -> sprintf "VERIFY pred\n");
       let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
       axioms @ aux_axioms, []
+  | Result.Ok (PCList _) -> failwith "verification of predicates never produces pc chunks" 
 
  
 let verify_function spl_prog prog aux_axioms func =
@@ -444,6 +445,7 @@ let verify_function spl_prog prog aux_axioms func =
       Debug.debug (fun () -> sprintf "VERIFY FUNCTION \n");
       let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
       axioms @ aux_axioms, []
+  | Result.Ok (PCList (_, _)) -> failwith "function verification never produces pc chunks"
 
 (** verify checks procedures are well-formed specs and the postcondition can be met by executing the body under the precondition *)
 let verify spl_prog prog aux_axioms proc = 

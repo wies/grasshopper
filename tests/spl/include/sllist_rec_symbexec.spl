@@ -3,6 +3,6 @@ struct Node {
 }
 
 predicate lseg(x: Node, y: Node) {
-  x == y ||
+  x == y ? emp : 
   x != y &*& acc(x.next) &*& lseg(x.next, y)
 }

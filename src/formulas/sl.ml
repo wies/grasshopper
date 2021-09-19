@@ -30,6 +30,7 @@ type form =
   | SepOp of sep_op * form * form * source_position option
   | BoolOp of bool_op * form list * source_position option
   | Binder of binder * (ident * sort) list * form * source_position option
+  | Ite of Grass.form * form * form * source_position option
 
 module SlSet = Set.Make(struct
     type t = form
@@ -68,6 +69,7 @@ let rec pr_form ppf = function
       fprintf ppf "%a(@[%a@])" Grass.pr_ident p Grass.pr_term_list ts
   | Binder (b, vs, f, _) ->
       fprintf ppf "@[(%a)@]" pr_quantifier (b, vs, f)
+  | Ite (cond, f1, f2, _) -> fprintf ppf "ite(@[%a@], @[%a@], @[%a@])" Grass.pr_form cond pr_form f1 pr_form f2
 
 and pr_sep_star ppf = function
   | [] -> fprintf ppf "%s" "emp"
