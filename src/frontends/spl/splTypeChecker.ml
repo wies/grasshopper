@@ -603,18 +603,16 @@ let infer_types cu locals ty e =
         (* Check whether return type matches expected type *)
         let rty =
           match decl.pr_outputs with
-          | [rid] -> 
-              let rdecl = IdMap.find rid decl.pr_locals in
-              match_types cu pos ty rdecl.v_type
+          | [rid] -> failwith "todo replace with a proper type error from splErrors"   
           | _ ->
               let body_ty =
                 decl.pr_body |>
                 Opt.map (type_of_expr cu locals) |>
                 Opt.get_or_else (if decl.pr_is_pure then BoolType else PermType)
               in
-              match_types cu pos ty body_ty
+              match_types cu pos PermType body_ty
         in
-        let e1, ty1 = it locals rty e in
+        let e1, ty1 = it locals ty e in
         Unfolding (id, es1, e1, pos), ty1
     | ProcCall (id, es, pos) ->
         let decl = IdMap.find id cu.proc_decls in

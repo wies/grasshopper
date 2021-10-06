@@ -38,6 +38,7 @@ procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int)
   r := z;
 }
 
+/*
 procedure client(a: Node)
   requires acc(a.data)
 {
@@ -51,3 +52,4 @@ procedure set(x: Node, i: Int)
 {
   x.data := i;
 }
+*/

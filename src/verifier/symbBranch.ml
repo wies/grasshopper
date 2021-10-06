@@ -47,36 +47,24 @@ let branch state f fc_f fc_notf =
   let fs = (smk_and (pc_collect_constr state.pc)) in
   Debug.debug(fun () -> sprintf "FS **** %s\n" (string_of_form fs));
 
-  let f2 ff =
-    match check_entail state.prog fs ff with
-    | Result.Ok _ -> 
-        Debug.debug(fun () -> "check_entail f INFEASABLE\n");
-        Result.Ok (Forms [])
-    | Result.Error _ -> 
-      Debug.debug(fun () -> "check_entail f OK\n");
-      fc_notf {state with pc = (fpush (mk_not ff))} (* f infeasable, branch with q_notf*)
-  in
-  match check_entail state.prog fs (mk_not f) with
-    | Result.Ok _ ->
-      Debug.debug(fun () -> "check_entail not f INFEASABLE\n");
-      f2 f
-    | Result.Error _ ->
-      Debug.debug(fun () -> "check_entail not f OK\n");
-      (match fc_f {state with pc= (fpush f)} with (* not f infeasable, branch with q_f*)
-      | Result.Error _ -> f2 f
-      | Result.Ok _ -> f2 f)
+  let rnot = fc_notf {state with pc = (fpush (mk_not f))} in
+  match rnot with
+  | Result.Error err as e -> e
+  | Result.Ok _ -> fc_f {state with pc= (fpush f)}
 
 let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
   let id = (fresh_ident "j") in
   let data = ref [] in
-  let _ = fc_branch (update_pc state (pc_push_new state.pc id (mk_true)))
+  let pcnew = pc_push_new state.pc id (mk_true) in
+  Debug.debug(fun () -> sprintf "XXX join pcnew = (%s)\n" (string_of_pc_stack pcnew));
+  let _ = fc_branch (update_pc state pcnew)
    (fun state' w ->
-     Debug.debug (fun () -> sprintf "STATE %s\n" (string_of_state state'));
-
+     Debug.debug (fun () -> sprintf "STATE after branch %s\n" (string_of_state state'));
      Debug.debug(fun () -> sprintf "Qjoin id = %s\n" (string_of_ident id));
      Debug.debug(fun () -> sprintf "Qjoin w = %s\n" (string_of_term w));
      
-     (*TODO fix how we propigate data *)
+     let pcaft = pc_after state'.pc id in
+     Debug.debug(fun () -> sprintf "XXX PCAFTER %s\n" (string_of_pc_stack pcaft));
      let r = ((pc_after state'.pc id), w) in
      data := r :: !data;
      Result.Ok (Forms []))

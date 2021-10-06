@@ -153,20 +153,13 @@ let string_of_pc_stack pc =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let pc_push_new (stack: pc_stack) scope_id br_cond =
-  match stack with
-  | [] -> [(scope_id, br_cond, [])]
-  | stack ->
-      let s = (scope_id, br_cond, []) :: stack in
-      Debug.debug( fun() -> sprintf "pc_push_new %s\n" (string_of_pc_stack s));
-      s
+let pc_push_new (stack: pc_stack) scope_id br_cond = (scope_id, br_cond, []) :: stack
   
 let rec pc_add_path_cond (stack: pc_stack) f =
   match stack with
   | [] -> 
       Debug.debug(fun () -> sprintf "pc_add_path_cond (%s)\n" (string_of_form f));
-      let s = pc_push_new [] (fresh_ident "scope") (mk_true) in
-      pc_add_path_cond s f
+      ((fresh_ident "scope"), (mk_true), [f]) :: stack
   | (sid, bc, pcs) :: stack' -> (sid, bc, f :: pcs) :: stack'
 
 let pc_add_path_conds (stack: pc_stack) fs = 
@@ -175,18 +168,15 @@ let pc_add_path_conds (stack: pc_stack) fs =
   stack fs
 
 let rec pc_after (pcs: pc_stack) scope_id =
-  match pcs with
-  | [] -> []
-  | stack' :: (sid, bc, pcs) :: suffix ->
-    if sid = scope_id
-    then [stack']
-    else pc_after suffix scope_id
-  | (sid, bc, pcs) :: suffix ->
-    if sid = scope_id
-    then []
-    else pc_after suffix scope_id
-
-
+  let rec f acc scope_id l =
+    match l with
+    | [] -> [] 
+    | (sid, bc, pcs) :: t ->
+        let l = (sid, bc, pcs) :: acc in
+        if sid = scope_id then List.rev l 
+        else f l scope_id t 
+  in f [] scope_id pcs
+      
 let pc_collect_constr (stack: pc_stack) =
   List.fold_left
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))

@@ -8,6 +8,7 @@ open SlUtil
 open Util
 
 let produce_symb_form state f snp (fc: symb_state -> vresult) =
+  (* push both the formula f and a constraint that the snap == emp *)
   let s2 = { state with pc = pc_add_path_cond state.pc f} in
   let s3 = {s2 with pc = pc_add_path_cond s2.pc 
     (GrassUtil.mk_atom Grass.Eq [snp; emp_snap])}
@@ -136,7 +137,11 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
   | Sl.Binder (b, [], f, _) ->
       produce_sl_form state f snp fc
   | Sl.Binder (b, ts, f, _) -> todo "Binder"
-  | Sl.Ite _ -> todo "ITE in consume_sl_form"
+  | Sl.Ite (cond, f1, f2, _) ->
+      eval_form state cond (fun state' cond' ->
+        branch state' cond' 
+            (fun state'' -> produce_sl_form state'' f1 snp fc)
+            (fun state'' -> produce_sl_form state'' f2 snp fc))
 
 and produce_sl_symb_forms state (fs: Sl.form list) snp (fc: symb_state -> vresult) =
   match fs with
@@ -408,17 +413,24 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
        fc {state2' with heap=state.heap} ts')
   | App (BoolConst b, ts, srt) as f -> fc state f
   | App (Ite, [cond; e1; e2], srt) ->
-      eval_term state cond (fun state2 cond' ->
-        join state2 (fun state3 q_join ->
-          branch state3 (Atom (cond', [])) 
-            (fun state3' -> eval_term state3' e1 q_join)
-            (fun state3' -> eval_term state3' e2 q_join))
-        (fun state3 v -> 
-          match v with
-          | [([Atom (e1', _)], e2'); ([_], e3')] ->
-          (* look at what form e1' and see if it's singleton term Bool. *)
-            fc state3 (App (Ite, [e1'; e2'; e3'], srt))
-          | ll ->
+      eval_term state cond (fun state1 cond' ->
+        join state1 (fun state2 q_branch ->
+          branch state2 (Atom (cond', [])) 
+            (fun state3 -> eval_term state3 e1 q_branch)
+            (fun state3 -> eval_term state3 e2 q_branch))
+          (fun state2' v -> 
+            Debug.debug(fun() -> sprintf "STATE in join contin (%s)\n" (string_of_state state2'));
+            Debug.debug(fun() -> sprintf "Sizeof v (%d)\n" (List.length v)); 
+            Debug.debug(fun() -> sprintf "hd v (%s)\n" (string_of_forms (fst (List.hd v)))); 
+            match v with
+            (* Try to construct this list so that the !v is in the else branch*)
+            | [([_; Atom(e1', _)], e2'); ([_; _], e3')] ->
+            (* look at what form e1' and see if it's singleton term Bool. *)
+              fc state2' (App (Ite, [e1'; e2'; e3'], srt))
+            | [([_; BoolOp(Not, [Atom(e1', _)])], e2'); ([_; _], e3')] ->
+              fc state2' (App (Ite, [e1'; e2'; e3'], srt))
+            | ll ->
+              Debug.debug(fun () -> "XXX JOIN contin\n");
               let _ = List.map (fun (fs, ts) ->
               Debug.debug(fun () -> sprintf "(fs: %s, ts: %s)\n" (string_of_forms fs) (string_of_term ts))) ll
               in
