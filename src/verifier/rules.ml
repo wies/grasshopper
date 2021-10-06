@@ -242,7 +242,11 @@ and consume_sl_symb_form state heap (f: Sl.form) (fc: symb_state -> symb_heap ->
      fc state heap (emp_snap)
   | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
   | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
-  | Sl.Ite _ -> todo "ITE in consume_sl_symb_form"
+  | Sl.Ite (cond, f1, f2, _)  -> 
+     eval_form state cond (fun state' cond' ->
+        branch state' cond' 
+            (fun state'' -> consume_sl_form state'' state''.heap f1 fc)
+            (fun state'' -> consume_sl_form state'' state''.heap f2 fc))
 
 and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term -> vresult) =
   Debug.debug(fun() ->
@@ -428,7 +432,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
             (* look at what form e1' and see if it's singleton term Bool. *)
               fc state2' (App (Ite, [e1'; e2'; e3'], srt))
             | [([_; BoolOp(Not, [Atom(e1', _)])], e2'); ([_; _], e3')] ->
-              fc state2' (App (Ite, [e1'; e2'; e3'], srt))
+              fc state2' (App (Ite, [e1'; e3'; e2'], srt))
             | ll ->
               Debug.debug(fun () -> "XXX JOIN contin\n");
               let _ = List.map (fun (fs, ts) ->
