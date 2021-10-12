@@ -75,6 +75,7 @@ function length(x: Node, y: Node) returns (res: Int)
  unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y);
 }
 
+/*
 procedure concat(x: Node, y: Node)
   returns (z: Node)
   requires lseg(x, null) &*& lseg(y, null)
@@ -103,3 +104,4 @@ procedure concat(x: Node, y: Node)
     }
   }
 }
+*/

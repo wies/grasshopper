@@ -120,8 +120,7 @@ and produce_sl_form state (f: Sl.form) snp (fc: symb_state -> vresult) =
   | Sl.Atom (Sl.Region, ts, a) -> 
       Debug.debug (fun () -> sprintf "region ts (%s)\n" (string_of_term_list ts));
       todo "region terms ts"
-  | Sl.Atom (Sl.Emp, [], _) ->
-      fc state
+  | Sl.Atom (Sl.Emp, [], _) -> fc state
   | Sl.Atom (Sl.Emp, ts, _) -> todo "Atom emp ts"
   | Sl.Atom (Sl.Pred id, ts, _) -> 
       eval_terms state ts (fun state' ts' ->
@@ -431,6 +430,10 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
             | [([_; Atom(e1', _)], e2'); ([_; _], e3')] ->
             (* look at what form e1' and see if it's singleton term Bool. *)
               fc state2' (App (Ite, [e1'; e2'; e3'], srt))
+            | [([_; Atom(e1', _)], e2')] ->
+              fc state2' e2'
+            | [([_; BoolOp(Not, [Atom(e1', _)])], e2')] ->
+              fc state2' e2'
             | [([_; BoolOp(Not, [Atom(e1', _)])], e2'); ([_; _], e3')] ->
               fc state2' (App (Ite, [e1'; e3'; e2'], srt))
             | ll ->
@@ -438,7 +441,7 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
               let _ = List.map (fun (fs, ts) ->
               Debug.debug(fun () -> sprintf "(fs: %s, ts: %s)\n" (string_of_forms fs) (string_of_term ts))) ll
               in
-            failwith "die"))
+            failwith "FOO die"))
   | App (Unfolding, [App(FreeSym id, args, Bool); in_term], srt) -> 
       let state1 = incr_pred_cycle state id in
       if count_cycles state < rec_unfolding_limit then
@@ -467,8 +470,11 @@ and eval_term state t (fc: symb_state -> term -> vresult) =
           in
           (* consume the acc(pred(..)) from the heap *)
           consume_sl_form state2 state2.heap (SlUtil.mk_pred pred.pred_contract.contr_name ts') (fun state3 _ snap ->
+              Debug.debug(fun () -> sprintf "State3 in Consume contin %s\n" (string_of_state state3));
             join_prime state3 (fun state4 q_join -> 
+              Debug.debug(fun () -> sprintf "State4 in Qbranch %s\n" (string_of_state state4));
                 produce state4 bdy.spec_form snap (fun state5 ->
+                  Debug.debug(fun() -> "Start Eval in_term");
                   eval_term state5 in_term (fun state6 in_term' ->
                     let state6' = {state6 with heap=state2.heap} in
                     q_join state6' in_term'))) fc))

@@ -40,19 +40,19 @@ let pc_segs (pi: pc_stack) =
   (List.rev impls, List.rev bcs)
 
 let branch state f fc_f fc_notf =
-  Debug.debug(fun () -> sprintf "BRANCH\n");
   let fpush ff =
     pc_push_new state.pc (fresh_ident "branch") ff
   in
-  let fs = (smk_and (pc_collect_constr state.pc)) in
-  Debug.debug(fun () -> sprintf "FS **** %s\n" (string_of_form fs));
-
-  let rnot = fc_notf {state with pc = (fpush (mk_not f))} in
-  match rnot with
-  | Result.Error err as e -> e
-  | Result.Ok _ -> fc_f {state with pc= (fpush f)}
+  let _ = if check_bool state.pc state.prog (mk_not f) then
+    Result.Ok (Forms []) else fc_f {state with pc = fpush f}
+  in
+  let f_res = if check_bool state.pc state.prog f then
+    Result.Ok (Forms []) else fc_notf {state with pc = fpush (mk_not f)}
+  in
+  f_res
 
 let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
+  Debug.debug(fun () -> sprintf "join state entry = (%s)\n" (string_of_state state));
   let id = (fresh_ident "j") in
   let data = ref [] in
   let pcnew = pc_push_new state.pc id (mk_true) in
@@ -66,6 +66,7 @@ let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vres
      let pcaft = pc_after state'.pc id in
      Debug.debug(fun () -> sprintf "XXX PCAFTER %s\n" (string_of_pc_stack pcaft));
      let r = ((pc_after state'.pc id), w) in
+     Debug.debug (fun () -> sprintf "STATE pc_after %s\n" (string_of_state state'));
      data := r :: !data;
      Result.Ok (Forms []))
   in
