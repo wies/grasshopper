@@ -201,25 +201,28 @@ and consume_sl_symb_form state heap (f: Sl.form) (fc: symb_state -> symb_heap ->
     lineSep (Sl.string_of_form f) (string_of_state state));
   match f with
   | Sl.Pure (p, _) ->
+   Debug.debug(fun () -> "CheckSymb Forms\n");
    check_symb_forms state heap [p] fc
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [r], _) -> 
+     Debug.debug(fun () -> "Region\n");
       eval_term state r (fun state' t' ->
-        let (chunk, h') = heap_remove_by_term state.pc state.heap t' in
+        let (chunk, h') = heap_remove_by_term state.pc heap t' in
         fc state h' (emp_snap))
   | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], _) -> 
+     Debug.debug(fun () -> "Atom Pred\n");
      eval_term state obj (fun state' obj' ->
-       let hc = heap_find_by_field_id state'.pc state'.heap state'.prog obj' id in
+       let hc = heap_find_by_field_id state'.pc heap state'.prog obj' id in
         Debug.debug(fun () -> sprintf "found heap chunk (%s)\n" (string_of_hc hc)); 
-        let h' = heap_remove state'.heap state'.pc hc in 
-        fc {state' with heap=h'} h' (get_heap_chunk_snap hc))
+        let h' = heap_remove heap state'.pc hc in 
+        fc state' h' (get_heap_chunk_snap hc))
   | Sl.Atom (Sl.Region, ts, _) -> todo "region ts" 
   | Sl.Atom (Sl.Pred id, ts, _) -> 
       Debug.debug(fun () -> "Atom Pred\n");
       eval_terms state ts (fun state' ts' ->
-        let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
-        let h' = heap_remove state'.heap state'.pc pred_chunk in 
-        fc {state' with heap=h'} h' (get_heap_chunk_snap pred_chunk))
+        let pred_chunk = heap_find_pred_chunk state'.pc heap id ts' in
+        let h' = heap_remove heap state'.pc pred_chunk in 
+        fc state' h' (get_heap_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
     consume_sl_symb_form state heap f1 (fun st2 h2 s1 ->
@@ -255,18 +258,23 @@ and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term
   | Sl.Pure (p, _) ->
    Debug.debug(fun () -> "Pure\n");
    consume_form state heap p fc 
-  | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
+  | Sl.Atom (Sl.Emp, ts, _) ->
+      Debug.debug(fun () -> sprintf "Emp\n");
+      fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [obj; App (FreeSym id, _, _)], _) -> 
+      Debug.debug(fun () -> sprintf "REGION\n");
       eval_term state obj (fun state' t' ->
-        let chunk = heap_find_by_field_id state.pc state.heap state.prog t' id in
-        let h' = heap_remove state.heap state.pc chunk in
+        let chunk = heap_find_by_field_id state.pc heap state.prog t' id in
+        let h' = heap_remove heap state.pc chunk in
         fc state h' (get_heap_chunk_snap chunk))
-  | Sl.Atom (Sl.Region, ts, _) -> fc state heap (emp_snap)
+  | Sl.Atom (Sl.Region, ts, _) ->
+      Debug.debug(fun () -> sprintf "REGION\n");
+      fc state heap (emp_snap)
   | Sl.Atom (Sl.Pred id, ts, _) -> 
      Debug.debug(fun () -> "Pred\n");
      eval_terms state ts (fun state' ts' ->
-        let pred_chunk = heap_find_pred_chunk state'.pc state'.heap id ts' in
-        let h' = heap_remove state'.heap state'.pc pred_chunk in 
+        let pred_chunk = heap_find_pred_chunk state'.pc heap id ts' in
+        let h' = heap_remove heap state'.pc pred_chunk in 
         fc {state' with heap=h'} h' (get_heap_chunk_snap pred_chunk))
   | Sl.SepOp (Sl.SepStar, f1, f2, _) ->
      Debug.debug( fun() -> sprintf "SL SepOp SepStar \n");
@@ -277,6 +285,7 @@ and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term
      Debug.debug( fun() -> sprintf "SL SepOp SepIncl\n");
      fc state heap (emp_snap)
   | Sl.SepOp (Sl.SepPlus, _, _, _) ->
+     Debug.debug(fun () -> sprintf "SepPlus\n");
      fc state heap (emp_snap)
   | Sl.BoolOp (Grass.And, fs, _) ->
    Debug.debug( fun() -> sprintf "SL BoolOp And\n");
@@ -287,8 +296,15 @@ and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term
   | Sl.BoolOp (Grass.Not, fs, _) ->
     Debug.debug( fun() -> sprintf "SL BoolOp Not\n");
      fc state heap (emp_snap)
-  | Sl.Binder (Grass.Forall, ts, f, _) -> fc state heap (emp_snap)
-  | Sl.Binder (Grass.Exists, ts, f, _) -> fc state heap (emp_snap)
+  | Sl.Binder (Grass.Forall, ts, f, _) -> 
+      Debug.debug(fun () -> sprintf "Binder \n");
+      fc state heap (emp_snap)
+  | Sl.Binder (Grass.Exists, [], f, _) -> 
+      Debug.debug(fun () -> sprintf "Exists\n");
+      consume_sl_form state heap f fc 
+  | Sl.Binder (Grass.Exists, ts, f, _) -> 
+      Debug.debug(fun () -> sprintf "Exists non emp binder \n");
+      fc state heap (emp_snap)
   | Sl.Ite _ -> todo "ITE in consume_sl_form"
 
 and consume state heap (sf: Prog.spec_form) (fc: symb_state -> symb_heap -> term -> vresult) =

@@ -99,6 +99,8 @@ let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -
     (* the sort of w should be the same *)
     Debug.debug(fun () -> sprintf "join in join_prime, bcs len (%d)\n" (List.length bcs));
     let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (mk_ident "joinFn") (state'.qvs) in
+
+    Debug.debug(fun () -> sprintf "XXXXXXXXXXXX jnFn sort (%s)\n" (string_of_sort (sort_of jnfn)));
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 
     in

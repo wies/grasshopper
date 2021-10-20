@@ -13,9 +13,9 @@ let rec remove_at n = function
 let sort_of_ret_val f = 
   match f with
   | Atom (App (Eq, [h1; h2], _), _) -> sort_of h2 
+  | Atom (App (Plus, [h1; h2], _), _) -> sort_of h2 
   | Atom (App (Ite, [_; t1; _], _), _) -> sort_of t1
   | _ -> failwith "foo"
-
 
 let subst_ret_val f sub = 
   match f with
@@ -29,6 +29,7 @@ let subst_ret_val f sub =
 let get_ret_val f = 
   match f with
   | Atom (App (Eq, [h1; h2], _), _) -> h2 
+  | Atom (App (Plus, [h1; h2], _) as a, _) -> a 
   | Atom (App (Ite, ts, x), y) -> App (Ite, ts, x)
   | _ -> failwith "foo"
 
@@ -43,7 +44,8 @@ let string_of_sorted_ids ids =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let fun_axiom name args srt precond state =
+(* better to get precond from the state on the stack*)
+let fun_axiom name args srt precond body state =
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
@@ -55,10 +57,9 @@ let fun_axiom name args srt precond state =
   in
 
   (* replace rhs formula without the equality on the return val *)
-  let rhs =
-    List.hd (remove_at 0
-     (get_pc_stack (List.hd state.pc)))
-  in
+  let rhs = body in
+
+  Debug.debug(fun () -> sprintf "RHS (%s) \n" (string_of_form rhs));
   let rhs_srt = sort_of_ret_val rhs in
 
   (* use sorted_free_vars_term to get the snap vars*)
@@ -102,12 +103,15 @@ let fun_axiom name args srt precond state =
   in
   let lhs = mk_free_fun rhs_srt name (List.rev lhs_vars) in  
 
+  let precond_form =
+    mk_and (pc_collect_constr state.pc)
+  in
+
   let pred =
-    (mk_sequent precond [subst_ret_val rhs lhs])
+    (mk_implies precond_form (subst_ret_val rhs lhs))
   in
   Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
   let pred' = GrassUtil.subst_consts sm pred in
-
 
   let fun_axiom_id = mk_name_generator (string_of_ident name) in
   let name_str, _ = (fun_axiom_id rhs_srt) in

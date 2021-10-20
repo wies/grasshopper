@@ -422,10 +422,11 @@ let verify_function spl_prog prog aux_axioms func =
   let result = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
     Debug.debug(fun () -> "verify_function produce body");
-    produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
+    eval_spec_form st2 body.spec_form (fun st3 body' ->
         consumes st3 postcond (fun st3' snap -> 
           (* fun_axiom can use mk_sequent to build the right axiom. *)
-          let axioms = fun_axiom name formals (sort_of return_term) (spec_forms_to_forms precond) st3' in
+          Debug.debug(fun () -> sprintf "State of prod precond into st (%s)\n" (string_of_state st));
+          let axioms = fun_axiom name formals (sort_of return_term) (spec_forms_to_forms precond) body' st3' in
           (* instea of let aux_axioms = fa :: aux_axioms in *)
           (* we can use an either type and return an error if the continuation fails, or the axioms.*)
           Debug.debug (fun () -> sprintf "VERIFY FUNCTION axiom (%s)\n" (string_of_form axioms));
