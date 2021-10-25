@@ -202,7 +202,8 @@ and consume_sl_symb_form state heap (f: Sl.form) (fc: symb_state -> symb_heap ->
   match f with
   | Sl.Pure (p, _) ->
    Debug.debug(fun () -> "CheckSymb Forms\n");
-   check_symb_forms state heap [p] fc
+   eval_form state p (fun state' p' ->
+     check_symb_forms state' heap [p'] fc)
   | Sl.Atom (Sl.Emp, ts, _) -> fc state heap (emp_snap) 
   | Sl.Atom (Sl.Region, [r], _) -> 
      Debug.debug(fun () -> "Region\n");
@@ -521,6 +522,7 @@ and eval_form state f (fc: symb_state -> form -> vresult) =
     Debug.debug(fun () ->
       sprintf "***** Atom \n");
       eval_term state t (fun state' t' ->
+        Debug.debug(fun () -> sprintf "XXX eval_form atom %s\n" (string_of_term t'));
         fc state' (Atom (t', a)))
   | BoolOp (op, fs) ->
     Debug.debug(fun () ->

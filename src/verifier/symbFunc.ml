@@ -45,7 +45,7 @@ let string_of_sorted_ids ids =
   |> sprintf "[%s]"
 
 (* better to get precond from the state on the stack*)
-let fun_axiom name args srt precond body state =
+let fun_axiom name args srt precond_form state =
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
@@ -57,8 +57,10 @@ let fun_axiom name args srt precond body state =
   in
 
   (* replace rhs formula without the equality on the return val *)
-  let rhs = body in
-
+  let rhs =
+    List.hd (remove_at 0
+     (get_pc_stack (List.hd state.pc)))
+  in
   Debug.debug(fun () -> sprintf "RHS (%s) \n" (string_of_form rhs));
   let rhs_srt = sort_of_ret_val rhs in
 
@@ -103,12 +105,10 @@ let fun_axiom name args srt precond body state =
   in
   let lhs = mk_free_fun rhs_srt name (List.rev lhs_vars) in  
 
-  let precond_form =
-    mk_and (pc_collect_constr state.pc)
-  in
-
   let pred =
-    (mk_implies precond_form (subst_ret_val rhs lhs))
+    match precond_form with
+    | Option.None -> subst_ret_val rhs lhs
+    | Option.Some precond -> mk_implies precond (subst_ret_val rhs lhs)
   in
   Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
   let pred' = GrassUtil.subst_consts sm pred in

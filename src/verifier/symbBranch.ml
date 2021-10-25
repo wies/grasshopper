@@ -30,6 +30,8 @@ let pc_segs (pi: pc_stack) =
       Debug.debug(fun () -> sprintf "pci_and %s\n" (string_of_form pci_and));
       let imp = mk_implies bci_and pci_and in
       Debug.debug(fun () -> sprintf "impl %s\n" (string_of_form imp));
+      Debug.debug(fun () -> sprintf "len bci %d\n" (List.length bcs));
+      Debug.debug(fun () -> sprintf "len cnds %d\n" (List.length cnds));
       (mk_implies (mk_and (bci :: bcs)) (mk_and pci)) :: cnds,
         bci :: bcs)
     ([], []) (List.rev pi)
@@ -104,4 +106,4 @@ let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 
     in
-    fc (update_pc state' (pc_add_path_conds state'.pc jndef)) jnfn)
+    fc (update_pc state' (pc_add_path_cond state'.pc (mk_and jndef))) jnfn)

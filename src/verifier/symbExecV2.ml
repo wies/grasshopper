@@ -408,6 +408,8 @@ let verify_function spl_prog prog aux_axioms func =
     fold_spec_list
       mk_sep_star (mk_atom Emp []) (Prog.precond_of_pred func)
   in
+
+  Debug.debug(fun () -> sprintf "precond XXXXX (%s)\n" (pr_spec_form_list precond));
   let postcond = 
     fold_spec_list
       mk_sep_star (mk_atom Emp []) (Prog.postcond_of_pred func)
@@ -422,11 +424,16 @@ let verify_function spl_prog prog aux_axioms func =
   let result = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
     Debug.debug(fun () -> "verify_function produce body");
-    eval_spec_form st2 body.spec_form (fun st3 body' ->
+    produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
           (* fun_axiom can use mk_sequent to build the right axiom. *)
           Debug.debug(fun () -> sprintf "State of prod precond into st (%s)\n" (string_of_state st));
-          let axioms = fun_axiom name formals (sort_of return_term) (spec_forms_to_forms precond) body' st3' in
+          let precond_form = 
+               match st.pc with
+               | [] -> Option.None
+               | s -> Option.Some (List.hd (remove_at 0 (get_pc_stack (List.hd s))))
+          in
+          let axioms = fun_axiom name formals (sort_of return_term) precond_form st3' in
           (* instea of let aux_axioms = fa :: aux_axioms in *)
           (* we can use an either type and return an error if the continuation fails, or the axioms.*)
           Debug.debug (fun () -> sprintf "VERIFY FUNCTION axiom (%s)\n" (string_of_form axioms));
