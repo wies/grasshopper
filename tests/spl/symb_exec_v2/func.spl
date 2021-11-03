@@ -23,6 +23,7 @@ procedure add_nodes(a: Node, b: Node) returns (c: Node)
 }
 */
 
+//Sent T an example where there is just an ite in the body, no precond ite*)
 function double(b: Bool, x: Node, y: Node, z: Node) returns (r: Int)
   requires acc(x.data) &*& acc(y.data)
   requires b ? z == x : z == y
@@ -32,6 +33,7 @@ function double(b: Bool, x: Node, y: Node, z: Node) returns (r: Int)
   b ? x.data + z.data : y.data + z.data
 }
 
+/*
 procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int) 
   requires acc(a.data) &*& acc(b.data)
   ensures acc(a.data) &*& acc(b.data) &*& r == a.data + a.data 
@@ -39,6 +41,7 @@ procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int)
   var z := double(true, a, b, a);
   r := z;
 }
+*/
 
 /*
 function double_foo(y: Node, z: Node) returns (r: Int)
@@ -56,7 +59,9 @@ procedure add_nodes_double_foo(a: Node, b: Node) returns (r: Int)
   var z := double_foo(a, b);
   r := z;
 }
+*/
 
+/*
 procedure client(a: Node)
   requires acc(a.data)
 {

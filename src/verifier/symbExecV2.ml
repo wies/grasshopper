@@ -427,6 +427,7 @@ let verify_function spl_prog prog aux_axioms func =
     produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
         consumes st3 postcond (fun st3' snap -> 
           (* fun_axiom can use mk_sequent to build the right axiom. *)
+          Debug.debug(fun () -> sprintf "State of prod precond into st3 (%s)\n" (string_of_state st3));
           Debug.debug(fun () -> sprintf "State of prod precond into st (%s)\n" (string_of_state st));
           let precond_form = 
                match st.pc with

@@ -1373,6 +1373,7 @@ let pr_pred ppf pred =
         pr_id_srt_list (add_srts (formals_of_pred pred))
         pr_contract pred.pred_contract
   | _ ->
+      Debug.debug(fun () -> "TRAIN STATION\n");
       fprintf ppf "@\n@[<2>%sfunction %a(@[<0>%a@])@\nreturns (@[<0>%a@])%a@]@\n"
         (if pred.pred_contract.contr_is_pure then "pure " else "")
         pr_ident (name_of_pred pred)

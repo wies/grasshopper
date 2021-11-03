@@ -241,9 +241,14 @@ let convert cu =
         let tcond2 = convert_term locals e2 in
         mk_app tcond1 tcond2
     | Ite (e1, e2, e3, pos) ->
+        Debug.debug(fun () -> sprintf "XXXX convert_term ITE\n");
         let t1 = convert_term locals e1 in
+        Debug.debug(fun () -> sprintf "XXXX convert_term (%s)\n" (string_of_term t1));
         let t2 = convert_term locals e2 in
+        Debug.debug(fun () -> sprintf "XXXX convert_term (%s)\n" (string_of_term t2));
         let t3 = convert_term locals e3 in
+        Debug.debug(fun () -> sprintf "XXXX convert_term (%s)\n" (string_of_term t3));
+        Debug.debug(fun () -> sprintf "XXXX convert_term (%s)\n" (string_of_term (GrassUtil.mk_ite t1 t2 t3)));
         GrassUtil.mk_ite t1 t2 t3
     | ConstrApp (id, es, pos) ->
         let decl = IdMap.find id cu.fun_decls in
@@ -286,6 +291,7 @@ let convert cu =
         let ts = List.map (convert_term locals) es in
         (match decl.pr_outputs with
         | [res] ->
+            Debug.debug(fun () -> sprintf "XXXX res outputs %s\n" (string_of_ident res));
             let res_decl = IdMap.find res decl.pr_locals in
             let res_srt = convert_type res_decl.v_type pos in
             GrassUtil.mk_free_fun res_srt id ts
@@ -353,6 +359,7 @@ let convert cu =
         let t2 = convert_term locals e2 in
         GrassUtil.mk_elem_term t1 t2
     | BinaryOp (e1, OpEq, e2, ty, pos) ->
+      Debug.debug(fun () -> sprintf "XXXX eq term ");
       let t1 = convert_term locals e1 in
       let t2 = convert_term locals e2 in
       GrassUtil.mk_eq_term t1 t2
@@ -476,8 +483,11 @@ let convert cu =
             GrassUtil.mk_srcpos pos (GrassUtil.mk_iff f1 f2)
         | _ ->
             (* catch all case *)
+            Debug.debug(fun () -> sprintf "XXX convert grass form\n");
             let t1 = convert_term locals e1 in
+            Debug.debug(fun () -> sprintf "XXX convert grass form t1 %s\n" (string_of_term t1));
             let t2 = convert_term locals e2 in
+            Debug.debug(fun () -> sprintf "XXX convert grass form t2 %s\n" (string_of_term t2));
             GrassUtil.mk_srcpos pos (GrassUtil.mk_eq t1 t2))
     | UnaryOp (OpNot, e, pos) ->
         let f = convert_grass_form locals e in
@@ -794,7 +804,9 @@ let convert cu =
           | rtype, _ ->
               let ret_id, locals =
                 match decl.pr_outputs with
-                | [r] -> r, decl.pr_locals
+                | [r] -> 
+                    Debug.debug(fun () -> sprintf "XXXX rtype %s\n" (string_of_ident r));
+                    r, decl.pr_locals
                 | _ ->
                     let res_id = GrassUtil.fresh_ident "res" in
                     let rdecl = 
@@ -813,15 +825,14 @@ let convert cu =
               let rec desugar_ite r = function
                 | Annot (e, a, pos2) ->
                     Annot (desugar_ite r e, a, pos2)
-                | Ite (cond, t, e, pos) ->
-                    if !Config.symbexec_v2 then
-                      Ite(cond, t, e, pos)
-                    else
+                | Ite (cond, t, e, pos) when (not !Config.symbexec_v2) ->
                     BinaryOp (BinaryOp (cond, OpImpl, desugar_ite r t, BoolType, pos),
                               OpAnd,
                               BinaryOp (UnaryOp (OpNot, cond, pos), OpImpl, desugar_ite r e, BoolType, pos),
                               BoolType, pos)
-                | e -> BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
+                | e -> 
+                    Debug.debug(fun () -> sprintf "XXXX Ite translation +++\n");
+                    BinaryOp (r, OpEq, e, BoolType, pos_of_expr e)
               in
               let opt_body = Opt.map (function 
                 | Binder (Comp, vs, e, pos) ->
