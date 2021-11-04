@@ -100,23 +100,11 @@ let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vres
 let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
   join state fc_branch (fun state' bcs ->
     (* the sort of w should be the same *)
-    Debug.debug(fun () -> sprintf "join in join_prime, bcs len (%d)\n" (List.length bcs));
-    (* XXX: fresh joinFn, joinFn needs to be defined interms of what the branching gives me *)
-
     let pc' = (mk_and (pc_collect_constr state'.pc)) in
-
     let vs = sorted_free_vars pc' in
     let join_fn_args = List.map (fun (id, srt) -> Var(id, srt)) (IdSrtSet.elements vs) in
-    let _ = IdSrtSet.map (fun (v, s) ->
-      Debug.debug(fun () -> sprintf "(Nugg x: %s, s: %s)\n" (string_of_ident v) (string_of_sort s));
-      (v, s)) vs
-    in
     let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (fresh_ident "joinFn") (join_fn_args) in
-
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 
     in
-
-    Debug.debug(fun () -> sprintf "XXXXXXXXXXXX jnFn sort (%s)\n" (string_of_sort (sort_of jnfn)));
- 
     fc (update_pc state' (pc_add_path_cond state'.pc (mk_and jndef))) jnfn)
