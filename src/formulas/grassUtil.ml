@@ -279,7 +279,6 @@ let symbol_of_ident =
   fun ((name, _) as id) ->
     List.assoc_opt name symbol_map |>
     Opt.get_or_else (FreeSym id)
- 
 
 (** {6 (Smart) constructors} *)
 
@@ -979,7 +978,6 @@ let sorted_free_vars f =
     | App (_, ts, _) ->
 	List.fold_left (fvt bv) vars ts
   in fold_terms_with_bound fvt IdSrtSet.empty f
-
 
 (** Computes the set of all sorts of the terms appearing in formula [f]. *)
 let sorts f =

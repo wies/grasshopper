@@ -586,6 +586,7 @@ type symb_state = {
     contract: contract;
     qvs: term list;
     visited_preds: ident list;
+    join_fn: term option;
   }
 
 let mk_symb_state st prog contract =
@@ -597,6 +598,7 @@ let mk_symb_state st prog contract =
     contract=contract;
     qvs=[];
     visited_preds=[];
+    join_fn=None;
   }
 
 let incr_pred_cycle state id =
@@ -620,6 +622,7 @@ let update_store state store old_heap =
 
 let update_pc state pcs =
   {state with pc=pcs}
+
 
 let string_of_state s =
   let store = string_of_symb_store s.store in
@@ -650,4 +653,5 @@ let merge_states s1 s2 =
    contract=s1.contract (* procs are the same *);
    qvs=merge_lsts s1.qvs s2.qvs;
    visited_preds=s1.visited_preds @ s2.visited_preds;
+   join_fn=s1.join_fn;
  }

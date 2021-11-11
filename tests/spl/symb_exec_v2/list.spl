@@ -73,7 +73,6 @@ function length(x: Node, y: Node) returns (res: Int)
   ensures res >= 0
 {
  unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y);
- //unfolding lseg(x, y) in x == y ? 0 : 1;
 }
 
 /*

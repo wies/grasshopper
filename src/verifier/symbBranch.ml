@@ -100,11 +100,13 @@ let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vres
 let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
   join state fc_branch (fun state' bcs ->
     (* the sort of w should be the same *)
-    let pc' = (mk_and (pc_collect_constr state'.pc)) in
-    let vs = sorted_free_vars pc' in
-    let join_fn_args = List.map (fun (id, srt) -> Var(id, srt)) (IdSrtSet.elements vs) in
-    let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (fresh_ident "joinFn") (join_fn_args) in
+    let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (mk_ident "joinFn") (state'.qvs) in
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 
     in
-    fc (update_pc state' (pc_add_path_cond state'.pc (mk_and jndef))) jnfn)
+    Debug.debug(fun() -> sprintf "XXXX join prime state %s\n" (string_of_state state'));
+    let st = (update_pc state' (pc_add_path_cond state'.pc (mk_and jndef))) in
+    let st' = {st with join_fn=(Some jnfn)} in
+
+    Debug.debug(fun() -> sprintf "XXXX join def %s\n" (string_of_state st));
+    fc (update_pc st' (pc_add_path_cond state'.pc (mk_and jndef))) jnfn)
