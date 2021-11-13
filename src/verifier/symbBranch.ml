@@ -100,7 +100,7 @@ let join state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vres
 let join_prime state (fc_branch: symb_state -> (symb_state -> term -> vresult) -> vresult) fc : vresult =
   join state fc_branch (fun state' bcs ->
     (* the sort of w should be the same *)
-    let jnfn = mk_free_app (sort_of (snd (List.hd bcs))) (mk_ident "joinFn") (state'.qvs) in
+    let jnfn = mk_var (sort_of (snd (List.hd bcs))) (mk_ident "joinFn") in
     let jndef = 
       List.map (fun (bcs', w) -> mk_implies (mk_and bcs') (mk_eq jnfn w)) bcs 
     in

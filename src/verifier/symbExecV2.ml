@@ -424,26 +424,33 @@ let verify_function spl_prog prog aux_axioms func =
   let result = produces init_state precond (fresh_snap_tree ()) (fun st ->
     let st2 = {st with store = havoc st.store [return_term]} in
     Debug.debug(fun () -> "verify_function produce body");
-    produce_symb st2 body.spec_form (fresh_snap_tree ()) (fun st3 ->
-        let precond_form = 
-           match st.pc with
-             | [] -> Option.None
-             | s -> Option.Some (List.hd (remove_at 0 (get_pc_stack (List.hd s))))
-        in
-        let axioms = fun_axiom name formals (sort_of return_term) precond_form st3 in
+    produces st2 postcond (fresh_snap_tree ()) (fun st ->
+      (* generate axiom for postcond len(x.next, y) >= 0, for example *)
+       (* add postcond axiom to st2 *)
+        (* try to get rid of precond_form *)
+
+        Debug.debug(fun () -> "****** postcond axiom \n");
+        (* to distingush between postcond and precond state on the stack try using distinct
+         * scopes as in (scope, br, []).*)
+
+        let axioms = gen_fun_axiom st name formals return_term in
+
+        Debug.debug (fun () -> sprintf "postcond axiom (%s)\n" (string_of_form axioms));
         let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) [axioms] in 
-        (* need to put the formulas from the precondition on the stack and the formula we need is
-         * forall x, y, z :: precond |-> f() = body try mk_sequent *)
+        let prog' = {st2.prog with prog_axioms = sfs @ st2.prog.prog_axioms} in
+        let st2' = {st2 with prog = prog'} in
+
+      produce_symb st2' body.spec_form (fresh_snap_tree ()) (fun st3 ->
+
+        let axioms = gen_fun_axiom st3 name formals return_term in
+        let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) [axioms] in 
         let prog' = {st3.prog with prog_axioms = sfs @ st3.prog.prog_axioms} in
         let st3' = {st3 with prog = prog'} in
+
         Debug.debug (fun () -> sprintf "VERIFY FUNCTION axiom (%s)\n" (string_of_form axioms));
-        let _ = print_prog stdout prog' in
-        consumes st3' postcond (fun st4 snap -> 
-          (* fun_axiom can use mk_sequent to build the right axiom. *)
-          Debug.debug(fun () -> sprintf "State of prod precond into st4 (%s)\n" (string_of_state st4));
-          Debug.debug(fun () -> sprintf "State of prod precond into st (%s)\n" (string_of_state st));
-         Result.Ok (Forms [axioms])
-    )))
+
+        consumes st3' postcond (fun st4 snap -> Result.Ok (Forms [axioms])
+    ))))
   in
   match result with
   | Result.Error err -> 

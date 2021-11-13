@@ -10,18 +10,26 @@ let rec remove_at n = function
   | [] -> []
   | h :: t -> if n = 0 then t else h :: remove_at (n - 1) t
 
+let rec subst_var f t =
+  match f with
+  | Atom (Var (_, _), a) -> Atom (t, a) 
+  | Atom (t, a) -> Atom (t, a) 
+  | BoolOp (op, fs) -> BoolOp(op, List.map (fun f -> subst_var f t) fs)
+  | Binder (b, vs, f, a) -> Binder (b, vs, subst_var f t, a)
+
 let sort_of_ret_val f = 
   match f with
   | Atom (App (Eq, [h1; h2], _), _) -> sort_of h2 
+  | Atom (App (GtEq, [h1; h2], _), _) -> sort_of h2 
   | Atom (App (Plus, [h1; h2], _), _) -> sort_of h2 
   | Atom (App (Ite, [_; t1; _], _), _) -> sort_of t1
   | _ -> failwith "foo"
 
 let subst_ret_val f sub = 
   match f with
-  | Atom (App (Eq, [h1; h2], a), b) -> 
+  | Atom (App (op, [h1; h2], a), b) -> 
       Debug.debug(fun() -> "subs ret val\n");
-      Atom (App (Eq, [sub; h2], a), b)  
+      Atom (App (op, [sub; h2], a), b)  
   | Atom (App (Ite, ts, a), _) ->
       mk_eq sub (App (Ite, ts, a))
   | _ -> f
@@ -53,8 +61,7 @@ let string_of_sorted_ids ids =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-(* better to get precond from the state on the stack*)
-let fun_axiom name args srt precond_form state =
+let gen_fun_axiom state name args return_val = 
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
@@ -71,23 +78,9 @@ let fun_axiom name args srt precond_form state =
      (get_pc_stack (List.hd state.pc)))
   in
 
-  let rhs' = if Option.is_some state.join_fn then
-    List.hd (remove_at 0 (remove_at 0
-     (get_pc_stack (List.hd state.pc))))
-   else rhs
-  in
   Debug.debug(fun () -> sprintf "RHS (%s) \n" (string_of_form rhs));
-  Debug.debug(fun () -> sprintf "RHS PRIME  (%s) \n" (string_of_form rhs'));
-  let rhs_srt = sort_of_ret_val rhs in
-
-  (* use sorted_free_vars_term to get the snap vars*)
-  let bound_vars =
-    List.rev symb_args
-  in
-  Debug.debug(fun ()-> sprintf "XXXX Bound Vars %s\n" (string_of_terms bound_vars));
-  let fv = if Option.is_some state.join_fn 
-    then sorted_free_vars rhs' else sorted_free_vars_term (get_ret_val rhs) 
-  in
+  let precond_form =  mk_and (List.tl (List.tl (get_pc_stack (List.hd state.pc)))) in
+  let fv = sorted_free_vars precond_form in
   let fvs =
     IdSrtSet.filter (fun id ->
       let re = Str.regexp "fresh_snap*" in
@@ -95,17 +88,6 @@ let fun_axiom name args srt precond_form state =
       (string_of_ident (fst id)) 0) fv
   in
   let fvs = IdSrtSet.elements fvs in
-
-  let _ = List.map (fun (id, srt) -> Debug.debug(fun () -> sprintf "formula free terms %s\n" (string_of_ident id)); (id, srt)) fvs in
-
-  let join_id = match state.join_fn with
-   | Some (App (FreeSym id, _, srt))   ->
-      Some (Var (id, srt))
-   | None ->
-      Debug.debug(fun () -> (sprintf "XXXXXX no joinfn"));
-      None
-   | _ -> failwith "unexpected joinFn shape"
-  in
   let bounds =
     List.rev (
       List.fold_left 
@@ -113,10 +95,11 @@ let fun_axiom name args srt precond_form state =
           match v with
           | Var (id, srt) -> (id, srt) :: acc
           | _ -> 
-          acc) [] bound_vars)
+          acc) [] symb_args)
   in
   let bounds = fvs @ bounds in
 
+   List.map (fun (id, s) -> Debug.debug(fun() -> sprintf "fvs (%s, %s) \n" (string_of_ident id) (string_of_sort s))) bounds;
   (* Axioms need to have Var(id, srt) insead of App(FreeSym fresh_snap, [], ...)*)
   let sm = List.fold_right 
    (fun (id, srt) sm -> 
@@ -132,30 +115,24 @@ let fun_axiom name args srt precond_form state =
         Var(id, srt))
       bounds
   in
-  let lhs = mk_free_fun rhs_srt name (List.rev lhs_vars) in  
 
-  let pred =
-    match precond_form with
-    | Option.None ->  (if Option.is_some state.join_fn then 
-        mk_and [(subst_ret_val rhs lhs); rhs'] else (subst_ret_val rhs lhs))
-    | Option.Some precond -> Debug.debug(fun () -> "XXXXXXXXXX precond implies");
-        (if Option.is_some state.join_fn then mk_implies rhs' (subst_ret_val rhs lhs)
-        else mk_implies precond (subst_ret_val rhs lhs))
-  in
-  Debug.debug(fun () -> sprintf "PRED (%s)\n" (string_of_form pred));
-  let pred' = GrassUtil.subst_consts sm pred in
+  let id_of (Var (id, _)) = id in
+  Debug.debug(fun () -> sprintf "ret_val %s\n" (string_of_term return_val));
+  let lhs = mk_free_fun (sort_of return_val) name (List.rev lhs_vars) in  
+  Debug.debug(fun () -> sprintf "LHS (%s) \n" (string_of_term lhs));
 
+  (* The precondition is the second element in the stack *)
+
+  let symb_ret_var = (find_symb_val state.store (id_of return_val)) in
+  let sm' = IdMap.add (id_of symb_ret_var) lhs IdMap.empty in
+  let f = mk_implies precond_form rhs in
+  let f = subst sm' f in
+
+  let pred' = GrassUtil.subst_consts sm f in
   let fun_axiom_id = mk_name_generator (string_of_ident name) in
-  let name_str, _ = (fun_axiom_id rhs_srt) in
+  let name_str, _ = fun_axiom_id (sort_of return_val) in
+  let fun_axiom = mk_forall bounds pred' in
 
-  let bounds' =
-    match join_id with
-    | Some (Var (id, srt)) ->
-       (id, srt) :: bounds
-    | None -> bounds 
-  in
-
-  let fun_axiom = mk_forall bounds' pred' in
   let ax = mk_axiom name_str fun_axiom in
   let fun_match_term, generate_knowns = (lhs, []) in
 
