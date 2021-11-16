@@ -429,11 +429,14 @@ let verify_function spl_prog prog aux_axioms func =
        (* add postcond axiom to st2 *)
         (* try to get rid of precond_form *)
 
+
+        Debug.debug(fun () -> sprintf "****** postcond axiom state from precond %s \n" (string_of_state st2));
+        Debug.debug(fun () -> sprintf "****** postcond axiom state from postcond %s \n" (string_of_state st));
         Debug.debug(fun () -> "****** postcond axiom \n");
         (* to distingush between postcond and precond state on the stack try using distinct
          * scopes as in (scope, br, []).*)
 
-        let axioms = gen_fun_axiom st name formals return_term in
+        let axioms = gen_fun_axiom st st2 name formals return_term in
 
         Debug.debug (fun () -> sprintf "postcond axiom (%s)\n" (string_of_form axioms));
         let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) [axioms] in 
@@ -442,7 +445,8 @@ let verify_function spl_prog prog aux_axioms func =
 
       produce_symb st2' body.spec_form (fresh_snap_tree ()) (fun st3 ->
 
-        let axioms = gen_fun_axiom st3 name formals return_term in
+        Debug.debug(fun () -> "****** body axiom \n");
+        let axioms = gen_fun_axiom st3 st2 name formals return_term in
         let sfs = List.map (fun f -> (mk_free_spec_form (FOL f) "" None dummy_position)) [axioms] in 
         let prog' = {st3.prog with prog_axioms = sfs @ st3.prog.prog_axioms} in
         let st3' = {st3 with prog = prog'} in

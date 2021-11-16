@@ -182,6 +182,14 @@ let pc_collect_constr (stack: pc_stack) =
   (fun pclist (id, bc, pcs) -> bc :: (pcs @ pclist))
   [] stack
 
+let rec diff_stacks pc1 pc2 =
+  List.filter (fun x -> not (List.mem x pc2)) pc1
+
+(*let postcond_stack =
+    diff_stacks (pc_of_chunk (List.hd state.pc)) (pc_of_chunk (List.hd state_precond.pc))
+  in
+  *)
+
 (** Snapshot defintions *)
 (** snapshot adt encoding for SMT solver *)
 let snap_tree_id = fresh_ident "snap_tree" 
@@ -270,6 +278,23 @@ type symb_heap = heap_chunk list
 
 let heap_add h stack hchunk = (hchunk :: h, stack)
 
+let rec remove_snaps f = 
+    let fvs = sorted_free_vars f in 
+    List.exists (fun (id, srt) -> 
+        Debug.debug(fun () -> sprintf "ID %s\n" (string_of_ident id));
+        Debug.debug(fun () -> sprintf "srt %s\n" (string_of_sort srt));
+        Debug.debug(fun () -> sprintf "srt = snap_typ %b\n" (srt = snap_typ));
+        srt = snap_typ
+      ) (IdSrtSet.elements fvs)
+
+ let rec remove_snaps_2 f= 
+   match f with
+   | Atom (App (Eq, [t1; t2], srt), _) -> 
+       if (sort_of t1) = snap_typ && t2 = emp_snap 
+       then true
+       else false
+   | _ -> false
+ 
 (* axioms for snapshot reads *)
 let f_snap_id = mk_name_generator "f_snap"
 let f_snap_inv_id = mk_name_generator "f_inv_snap"
@@ -623,6 +648,9 @@ let update_store state store old_heap =
 let update_pc state pcs =
   {state with pc=pcs}
 
+let update_pc_stack state pcstack : pc_chunk =
+  let (sid, brid, _) = List.hd state.pc in
+  (sid, brid, pcstack)
 
 let string_of_state s =
   let store = string_of_symb_store s.store in

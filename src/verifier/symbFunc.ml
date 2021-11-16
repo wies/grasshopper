@@ -61,10 +61,23 @@ let string_of_sorted_ids ids =
   |> String.concat ", "
   |> sprintf "[%s]"
 
-let gen_fun_axiom state name args return_val = 
+let gen_fun_axiom state state_precond name args return_val = 
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
+  let pc_of_chunk (_, _, pc) = pc in
+
+  (* function postconditions are only pure formulas so we need to scrub
+   * the formula of fresh_snap terms *)
+  let stack' = 
+    List.filter (fun f -> not (remove_snaps_2 f)) 
+    (pc_of_chunk (List.hd state.pc)) 
+  in
+  let state = {state with 
+      pc=((update_pc_stack state stack') :: (List.tl state.pc))}
+  in
+
+  Debug.debug(fun () -> sprintf "Stack after scrub (%s) \n" (string_of_pcset stack'));
   (* lookup each arg in args and get symbolic values *)
   let symb_args =
     List.map (fun a ->
@@ -73,14 +86,17 @@ let gen_fun_axiom state name args return_val =
   in
 
   (* replace rhs formula without the equality on the return val *)
-  let rhs =
-    List.hd (remove_at 0
-     (get_pc_stack (List.hd state.pc)))
+  let postcond_form = mk_and (get_pc_stack (List.hd state.pc))
   in
 
-  Debug.debug(fun () -> sprintf "RHS (%s) \n" (string_of_form rhs));
-  let precond_form =  mk_and (List.tl (List.tl (get_pc_stack (List.hd state.pc)))) in
-  let fv = sorted_free_vars precond_form in
+  (* To get the RHS we can peel off the stack until the tail is equal to the stack from precond *)
+  (* remove fresh_snaps from the stack *)
+  Debug.debug(fun () -> sprintf "PostCond form (%s) \n" (string_of_form postcond_form));
+  
+  let precond_form = mk_and (List.fold_left (fun acc (id, bc, pcs) -> pcs @ acc) [] state_precond.pc) in
+
+  Debug.debug(fun () -> sprintf "Precond form (%s) \n" (string_of_form precond_form));
+  let fv = sorted_free_vars postcond_form in
   let fvs =
     IdSrtSet.filter (fun id ->
       let re = Str.regexp "fresh_snap*" in
@@ -109,7 +125,7 @@ let gen_fun_axiom state name args return_val =
   in
 
   (* build the axiom *)
-  let lhs_vars =
+  let precond_vars =
     List.map
       (fun (id, srt) ->
         Var(id, srt))
@@ -118,14 +134,14 @@ let gen_fun_axiom state name args return_val =
 
   let id_of (Var (id, _)) = id in
   Debug.debug(fun () -> sprintf "ret_val %s\n" (string_of_term return_val));
-  let lhs = mk_free_fun (sort_of return_val) name (List.rev lhs_vars) in  
+  let lhs = mk_free_fun (sort_of return_val) name (List.rev precond_vars) in  
   Debug.debug(fun () -> sprintf "LHS (%s) \n" (string_of_term lhs));
 
   (* The precondition is the second element in the stack *)
 
   let symb_ret_var = (find_symb_val state.store (id_of return_val)) in
   let sm' = IdMap.add (id_of symb_ret_var) lhs IdMap.empty in
-  let f = mk_implies precond_form rhs in
+  let f = mk_implies precond_form postcond_form in
   let f = subst sm' f in
 
   let pred' = GrassUtil.subst_consts sm f in
@@ -138,5 +154,5 @@ let gen_fun_axiom state name args return_val =
 
   (* annotate the axiom with term generators *)
   let m = Match (mk_known fun_match_term, []) in
-  annotate (add_match fun_match_term lhs_vars m 
+  annotate (add_match fun_match_term precond_vars m 
     (add_generators state.prog (Some(name, m)) ax)) generate_knowns
