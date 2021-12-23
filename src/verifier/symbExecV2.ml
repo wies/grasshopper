@@ -319,11 +319,9 @@ let rec exec state comm (fc: symb_state -> vresult) =
           lineSep (string_of_state state)
     );
     eval_terms state pc.pred_args (fun state' args' ->
-      Debug.debug (fun () -> sprintf "fold terms (%s)\n" (string_of_term_list args'));
       let body = (IdMap.find pc.pred_name state.prog.prog_preds).pred_body in
       match body with
       | Some b ->
-        Debug.debug (fun () -> sprintf "body (%s)\n" (string_of_format pr_spec_form b));
         let ids = (IdMap.find pc.pred_name state.prog.prog_preds).pred_contract.contr_formals in 
         let sm =
           List.combine ids args' 
@@ -373,7 +371,7 @@ let verify_pred spl_prog prog aux_axioms pred =
       aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
   | Result.Ok (Forms axioms) -> 
       Debug.debug (fun () -> sprintf "VERIFY pred\n");
-      let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
+      (* let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in*)
       axioms @ aux_axioms, []
   | Result.Ok (PCList _) -> failwith "verification of predicates never produces pc chunks" 
 
@@ -462,7 +460,7 @@ let verify_function spl_prog prog aux_axioms func =
       aux_axioms, [({sp_file = ""; sp_start_line=0; sp_start_col=0; sp_end_line=0; sp_end_col=0}, err, Model.empty)]
   | Result.Ok (Forms axioms) -> 
       Debug.debug (fun () -> sprintf "VERIFY FUNCTION \n");
-      let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in
+      (*let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) axioms in*)
       axioms @ aux_axioms, []
   | Result.Ok (PCList (_, _)) -> failwith "function verification never produces pc chunks"
 

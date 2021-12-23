@@ -109,10 +109,10 @@ struct Node {
 
 procedure if3(x: Node, y: Node)
   requires acc(x.next) &*& acc(y.next)
-  ensures acc(x.next) &*& x.next == x &*& acc(y.next) &*& y.next == x
+  ensures x.next != x ? acc(y.next) &*& acc(x.next) &*& x.next == y : acc(y.next) &*& acc(x.next) &*& y.next == x 
 {
   if (x.next != x) {
-    x.next := x;
+    x.next := y;
   }
   y.next := x;
 }

@@ -65,13 +65,19 @@ let gen_fun_axiom state state_precond name args return_val =
   Debug.debug(fun () -> sprintf "Generating function axiom for (%s) \n State:\n {%s\n}\n\n"
     (string_of_ident name) (string_of_state state));
 
-  let pc_of_chunk (_, _, pc) = pc in
+  let postcond_stack =
+    match state.pc, state_precond.pc with
+    | (_, _, post_hd) :: _, [] -> post_hd
+    | (_, _, post_hd) :: _, (_, _, pre_hd) :: _ -> diff_stacks post_hd pre_hd
+    | _ -> failwith "can't generate axiom for function with no pre/postcond" 
+  in
 
+  Debug.debug(fun () -> sprintf "Postcond stack (%s) \n" (string_of_forms postcond_stack));
   (* function postconditions are only pure formulas so we need to scrub
    * the formula of fresh_snap terms *)
   let stack' = 
     List.filter (fun f -> not (remove_snaps_2 f)) 
-    (pc_of_chunk (List.hd state.pc)) 
+    postcond_stack 
   in
   let state = {state with 
       pc=((update_pc_stack state stack') :: (List.tl state.pc))}
@@ -115,7 +121,6 @@ let gen_fun_axiom state state_precond name args return_val =
   in
   let bounds = fvs @ bounds in
 
-   List.map (fun (id, s) -> Debug.debug(fun() -> sprintf "fvs (%s, %s) \n" (string_of_ident id) (string_of_sort s))) bounds;
   (* Axioms need to have Var(id, srt) insead of App(FreeSym fresh_snap, [], ...)*)
   let sm = List.fold_right 
    (fun (id, srt) sm -> 
@@ -132,10 +137,7 @@ let gen_fun_axiom state state_precond name args return_val =
       bounds
   in
 
-  let id_of (Var (id, _)) = id in
-  Debug.debug(fun () -> sprintf "ret_val %s\n" (string_of_term return_val));
   let lhs = mk_free_fun (sort_of return_val) name (List.rev precond_vars) in  
-  Debug.debug(fun () -> sprintf "LHS (%s) \n" (string_of_term lhs));
 
   (* The precondition is the second element in the stack *)
 

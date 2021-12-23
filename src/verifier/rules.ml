@@ -306,7 +306,11 @@ and consume_sl_form state heap (f: Sl.form) (fc: symb_state -> symb_heap -> term
   | Sl.Binder (Grass.Exists, ts, f, _) -> 
       Debug.debug(fun () -> sprintf "Exists non emp binder \n");
       fc state heap (emp_snap)
-  | Sl.Ite _ -> todo "ITE in consume_sl_form"
+  | Sl.Ite (cond, f1, f2, _)  -> 
+     eval_form state cond (fun state' cond' ->
+        branch state' cond' 
+            (fun state'' -> consume_sl_form state'' state''.heap f1 fc)
+            (fun state'' -> consume_sl_form state'' state''.heap f2 fc))
 
 and consume state heap (sf: Prog.spec_form) (fc: symb_state -> symb_heap -> term -> vresult) =
   match sf with

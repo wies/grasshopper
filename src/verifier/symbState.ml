@@ -119,6 +119,11 @@ let merge_stores s1 s2 =
     | _ -> None
   ) s1 s2
 
+ let id_of v =
+   match v with
+   | (Var (id, _)) -> id
+   | _ -> failwith "can't take id of non-var"
+
 (** path condition (pc) stack
   A sequence of scopes a tuple of (scope id, branch condition, [V])
   list[V] is the list of path conditions.
@@ -185,11 +190,6 @@ let pc_collect_constr (stack: pc_stack) =
 let rec diff_stacks pc1 pc2 =
   List.filter (fun x -> not (List.mem x pc2)) pc1
 
-(*let postcond_stack =
-    diff_stacks (pc_of_chunk (List.hd state.pc)) (pc_of_chunk (List.hd state_precond.pc))
-  in
-  *)
-
 (** Snapshot defintions *)
 (** snapshot adt encoding for SMT solver *)
 let snap_tree_id = fresh_ident "snap_tree" 
@@ -220,11 +220,6 @@ let emp_snap =
   App (Constructor emp_id, [], snap_typ)
 
 let snap_pair s1 s2 =
-  (*
-  match s2 with
-  | App (Constructor c, [], snap_typ) when c = emp_id -> s1
-  | _ -> App (Constructor tree_id, [s1; s2], snap_typ)  
-  *)
   App (Constructor tree_id, [s1; s2], snap_typ)  
 
 let fresh_snap_tree () =

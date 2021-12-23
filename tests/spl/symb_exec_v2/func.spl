@@ -31,7 +31,7 @@ function double(b: Bool, x: Node, y: Node, z: Node) returns (r: Int)
   b ? x.data + z.data : y.data + z.data
 }
 
-procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int) 
+procedure add_nodes_double_1(a: Node, b: Node) returns (r: Int) 
   requires acc(a.data) &*& acc(b.data)
   ensures acc(a.data) &*& acc(b.data) &*& r == a.data + a.data 
 {
@@ -39,7 +39,6 @@ procedure add_nodes_double_a(a: Node, b: Node) returns (r: Int)
   r := z;
 }
 
-/*
 function double_foo(y: Node, z: Node) returns (r: Int)
   requires acc(y.data) &*& acc(z.data)
   requires y.data > 0 && z.data > 0
@@ -48,27 +47,10 @@ function double_foo(y: Node, z: Node) returns (r: Int)
   y.data + z.data
 }
 
-procedure add_nodes_double_foo(a: Node, b: Node) returns (r: Int) 
+procedure add_nodes_double_2(a: Node, b: Node) returns (r: Int) 
   requires acc(a.data) &*& acc(b.data) &*& a.data > 0 && b.data > 0
   ensures acc(a.data) &*& acc(b.data) &*& r >= a.data + b.data 
 {
   var z := double_foo(a, b);
   r := z;
 }
-*/
-
-/*
-procedure client(a: Node)
-  requires acc(a.data)
-{
-  set(a, 5);
-  a.data := 6;
-}
-
-procedure set(x: Node, i: Int)
-  requires acc(x.data) && x.data < i
-  ensures  acc(x.data) && x.data == i
-{
-  x.data := i;
-}
-*/

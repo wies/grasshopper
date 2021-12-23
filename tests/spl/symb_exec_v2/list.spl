@@ -2,20 +2,27 @@ options "-symbexec-v2"
 
 include "../include/sllist_rec_symbexec.spl"
 
-/*
 lemma unfold_lseg(x: Node, y: Node)
   requires lseg(x, y) &*& x != y
-  ensures acc(x.next) &*& lseg(x.next, y)
+  ensures acc(x.next) &*& acc(x.data) &*& lseg(x.next, y)
 {
   unfold lseg(x, y);
 }
 
 lemma fold_left(x: Node, y: Node)
+  requires acc(x.next) &*& acc(x.data) &*& lseg(x.next, y) &*& y != x
+  ensures lseg(x, y)
+{
+  fold lseg(x, y);
+}
+
+lemma fold_left_no_data(x: Node, y: Node)
   requires acc(x.next) &*& lseg(x.next, y) &*& y != x
   ensures lseg(x, y)
 {
   fold lseg(x, y);
 }
+
 
 lemma empty_list(x: Node)
   requires emp
@@ -24,7 +31,41 @@ lemma empty_list(x: Node)
   fold lseg(x, x);
 }
 
+// TODO fix tight postcond check with heap.
+// TODO add non-null properties, acc(x.next) -> stack + x != null
+
+// a problem with fold/unfold add this as an example
+lemma fold_right(x: Node, y: Node)
+  requires acc(y.next) &*& acc(y.data) &*& lseg(x, y)
+  ensures lseg(x, y.next)
+{
+  unfold lseg(x, y);
+  if(x == y) {
+    fold lseg(y.next, y.next);
+  } else {
+    fold_right(x.next, y.next);
+  }
+  fold lseg(x, y.next);
+}
+
+// TODO add lemma states precond 
+// requires acc(x.next) &*& lseg(x, null)
+// post cond false
+/*
+lemma foo(..)
+ requires acc(x.next) &*& lseg(x, null)
+ post cond false
+{
+  unfold ...lseg
+}
+*/
+
+// delete with no access to data fields and you free, should fail.
+
+// Bogus precond.
 procedure delete(x: Node)
+//  old ones  requires acc(x.next) &*& lseg(x, null)
+// ensures acc(x.next) 
   requires lseg(x, null)
   ensures emp
 {
@@ -33,7 +74,84 @@ procedure delete(x: Node)
     delete(x.next);
     free x;
   }
-  fold lseg(x, null);
+}
+
+procedure append(lst: Node, v: Int)
+  requires lseg(lst, null) &*& lst != null
+  ensures lseg(lst, null)
+  // add postcond where length is orig len + 1
+{
+  unfold lseg(lst, null);
+
+  if (lst.next == null) {
+    var n := new Node();
+    n.data := v; 
+    n.next := null;
+    lst.next := n;
+
+    fold lseg(n, null);
+  } else {
+    append(lst.next, v);
+  }
+  fold lseg(lst, null);
+}
+
+procedure append_len(lst: Node, v: Int)
+  requires lseg(lst, null) &*& lst != null
+  ensures lseg(lst, null) &*& length(lst, null) == old(length(lst, null)) + 1
+  // add postcond where length is orig len + 1
+{
+  unfold lseg(lst, null);
+
+  if (lst.next == null) {
+    var n := new Node();
+    n.data := v; 
+    n.next := null;
+    lst.next := n;
+
+    fold lseg(n, null);
+  } else {
+    append(lst.next, v);
+  }
+  fold lseg(lst, null);
+}
+/*
+need lemma that proves you can add things to the end of the lst.
+*/
+
+procedure append_loop(lst: Node, v: Int)
+  requires lseg(lst, null) &*& lst != null
+  ensures lseg(lst, null)
+{
+  unfold lseg(lst, null);
+
+  var curr := lst;
+  while (curr.next != null)
+    invariant lseg(lst, curr) &*& acc(curr.next) &*& lseg(curr.next, null)
+  {
+    curr := curr.next;
+    unfold lseg(curr, null);
+  } 
+
+  var n := new Node();
+  n.data := v; 
+  n.next := null;
+  lst.next := n;
+
+  fold lseg(lst, null);
+}
+
+procedure remove_first(first: Node, last: Node)
+  returns  (value: Int, second: Node)
+  requires lseg(first, last)
+  requires first != last
+  ensures  lseg(second, last)
+{
+  unfold lseg(first, last);
+
+  value := first.data;
+  second := first.next;
+  free first;
 }
 
 procedure test_frame(x: Node, y: Node, z1: Node, z2: Node)
@@ -53,7 +171,8 @@ procedure reverse(lst: Node)
   unfold lseg(lst, null);
   while (curr != null) 
     invariant lseg(rev, null)
-    invariant lseg(curr, null)
+    invariant lseg(curr, null) 
+    invariant acc(curr.next) &*& curr.next != null
   {
     unfold lseg(rev, null);
     var tmp := curr;
@@ -64,7 +183,6 @@ procedure reverse(lst: Node)
   }
   fold lseg(lst, null);
 }
-*/
 
 /* todo: run this through viper */
 function length(x: Node, y: Node) returns (res: Int)
@@ -75,7 +193,6 @@ function length(x: Node, y: Node) returns (res: Int)
  unfolding lseg(x, y) in x == y ? 0 : 1 + length(x.next, y);
 }
 
-/*
 procedure concat(x: Node, y: Node)
   returns (z: Node)
   requires lseg(x, null) &*& lseg(y, null)
@@ -104,4 +221,3 @@ procedure concat(x: Node, y: Node)
     }
   }
 }
-*/

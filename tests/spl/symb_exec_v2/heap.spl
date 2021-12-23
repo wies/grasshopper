@@ -38,8 +38,6 @@ procedure assign_heap2(x: Node, y: Node)
   x.next := x;
 }
 
-/*
-// bug
 procedure assign_heap3(x: Node, y: Node)
   requires acc(x.next) &*& x.next == null &*& acc(y.next) &*& y == x
   ensures acc(x.next) &*& x.next == x
@@ -53,7 +51,6 @@ procedure spatial_neq1(x: Node, y: Node)
   ensures acc(x.next) &*& acc(y.next) &*& x.next != y.next
 {}
 
-// bug
 procedure assign_heap4(x: Node, y: Node)
   requires acc(x.next) &*& acc(y.next) &*& x.next == y &*& x.next.next == null
   ensures acc(x.next) &*& acc(y.next) &*& x.next == y &*& y.next == x
@@ -61,11 +58,9 @@ procedure assign_heap4(x: Node, y: Node)
   y.next := x;
 }
 
-// bug
 procedure assign_heap5(x: Node, y: Node)
   requires acc(x.next) &*& x.next == y &*& acc(y.next) &*& y.next == null
   ensures acc(x.next) &*& x.next == y &*& acc(y.next) &*& y.next == x
 {
   x.next.next := x;
 }
-*/

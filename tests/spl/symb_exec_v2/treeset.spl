@@ -43,11 +43,10 @@ procedure insert(root: Node, value: Int)
   unfold tree(new_root);
 }
 
-/* bugs
 procedure rotate_left(h: Node) 
   returns (res: Node)
   requires tree(h)
-  requires h != null && h.right != null
+  requires h != null &*& acc(h.right) &*& h.right != null
   ensures  tree(res)
 {
   unfold tree(h);
@@ -63,7 +62,7 @@ procedure rotate_left(h: Node)
 procedure rotate_right(h: Node ) 
   returns (res: Node)
   requires tree(h)
-  requires h != null && h.left != null
+  requires h != null &*& acc(h.left) &*& h.left != null
   ensures  tree(res)
 {
   unfold tree(h);
@@ -75,4 +74,3 @@ procedure rotate_right(h: Node )
   unfold tree(res);
   return x;
 }
-*/
