@@ -24,6 +24,22 @@ procedure pure1(x: Int)
   x := x + 3;
 }
 
+procedure pure2(x: Int, y: Int)
+  requires x == y
+  ensures x == y + 8
+{
+  x := x + 5;
+  x := x + 3;
+}
+
+procedure pure_swap(x: Int, y: Int)
+  requires x == 0 && y == 10 
+  ensures x == 10 && y == 0
+{
+  y, x := x, y;
+}
+
+
 procedure assume1(x: Int) 
   requires x > 0
   ensures x == 100 
@@ -55,19 +71,8 @@ procedure if2(x: Int, y: Int)
   }
 }
 
-procedure pure2(x: Int, y: Int)
-  requires x == y
-  ensures x == y + 8
-{
-  x := x + 5;
-  x := x + 3;
-}
-
-procedure pure_swap(x: Int, y: Int)
-  requires x == 0 && y == 10 
-  ensures x == 10 && y == 0
-{
-  y, x := x, y;
+struct DNode {
+  var data: Int;
 }
 
 procedure loop0(x: Int)
@@ -81,10 +86,6 @@ procedure loop0(x: Int)
     x := i;
     i := i + 1;
   }
-}
-
-struct DNode {
-  var data: Int;
 }
 
 procedure loop1(x: DNode)

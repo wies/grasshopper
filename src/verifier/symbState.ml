@@ -480,7 +480,7 @@ let infer_diseq heap stack =
 let check_entail prog p1 p2 =
   let snap_axioms = snapshot_axioms prog in
   let fun_axioms = spec_forms_to_forms prog.prog_axioms in
-  let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) fun_axioms in
+ (*  let _ = List.iter (fun f -> Printf.printf "**** axioms (%s)\n" (string_of_form f)) fun_axioms in*)
   if p1 = p2 || p2 = mk_true then Result.Ok () 
   else (* Dump it to an SMT solver *)
     (** TODO: collect program axioms and add to symbolic state *)

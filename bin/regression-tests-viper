@@ -1,0 +1,84 @@
+#!/bin/bash
+
+source bin/osx_gnu.sh
+
+# Format: <test name> <spl file> <procedure> <expected result>
+SYMB_EXEC_VIPER_TESTS="
+symb_exec_viper:basic:assign   tests/spl/symb_exec_v2/basic.spl               'assign'    pass
+symb_exec_viper:basic:assign2   tests/spl/symb_exec_v2/basic.spl               'assign2'   pass
+symb_exec_viper:basic:loop0   tests/spl/symb_exec_v2/basic.spl               'loop0'     pass
+symb_exec_viper:basic:loop1   tests/spl/symb_exec_v2/basic.spl               'loop1'     pass
+symb_exec_viper:basic:pure1   tests/spl/symb_exec_v2/basic.spl               'pure1'     pass
+symb_exec_viper:basic:pure2   tests/spl/symb_exec_v2/basic.spl               'pure2'     pass
+symb_exec_viper:basic:assume1   tests/spl/symb_exec_v2/basic.spl               'assume1'   pass
+symb_exec_viper:basic:if1   tests/spl/symb_exec_v2/basic.spl               'if1'     pass
+symb_exec_viper:basic:if2   tests/spl/symb_exec_v2/basic.spl               'if2'     pass
+symb_exec_viper:basic:if3   tests/spl/symb_exec_v2/basic.spl               'if3'     pass
+symb_exec_viper:basic:old1   tests/spl/symb_exec_v2/basic.spl               'old1'    pass
+symb_exec_viper:assert:foo  tests/spl/symb_exec_v2/basic_assert.spl        'foo'     pass
+symb_exec_viper:assert:bar  tests/spl/symb_exec_v2/basic_assert.spl        'bar'     pass
+symb_exec_viper:swap:foo tests/spl/symb_exec_v2/basic_swap.spl          'foo'     pass
+symb_exec_viper:counter tests/spl/symb_exec_v2/counter.spl             ''        pass
+symb_exec_viper:frame:pure_call   tests/spl/symb_exec_v2/frame.spl     'pure_call' pass
+symb_exec_viper:frame:pure_call2   tests/spl/symb_exec_v2/frame.spl    'pure_call2' pass
+symb_exec_viper:frame:pure_call3   tests/spl/symb_exec_v2/frame.spl    'pure_call3' pass
+symb_exec_viper:frame:pure_call4   tests/spl/symb_exec_v2/frame.spl    'pure_call4' pass
+symb_exec_viper:frame:pure_call5   tests/spl/symb_exec_v2/frame.spl    'pure_call5' pass
+symb_exec_viper:frame:pure_call6   tests/spl/symb_exec_v2/frame.spl    'pure_call6' pass
+symb_exec_viper:frame:foo   tests/spl/symb_exec_v2/frame.spl      'foo' pass
+symb_exec_viper:frame:foo3   tests/spl/symb_exec_v2/frame.spl     'foo3' pass
+symb_exec_viper:frame:foo4   tests/spl/symb_exec_v2/frame.spl     'foo4' pass
+symb_exec_viper:frame:foo5   tests/spl/symb_exec_v2/frame.spl     'foo5' pass
+symb_exec_viper:frame:foo_heap   tests/spl/symb_exec_v2/frame.spl 'foo_heap' pass
+symb_exec_viper:frame:bar_heap   tests/spl/symb_exec_v2/frame.spl 'bar_heap' pass
+symb_exec_viper:func:add_nodes tests/spl/symb_exec_v2/func.spl            'add_nodes' pass
+symb_exec_viper:func:add_nodes_double_1 tests/spl/symb_exec_v2/func.spl   'add_nodes_double_1' pass
+symb_exec_viper:func:add_nodes_double_2 tests/spl/symb_exec_v2/func.spl   'add_nodes_double_2' pass
+symb_exec_viper:heap:lookup_heap_1  tests/spl/symb_exec_v2/heap.spl       'lookup_heap_1' pass
+symb_exec_viper:heap:lookup_heap_assign  tests/spl/symb_exec_v2/heap.spl  'lookup_heap_assign' pass
+symb_exec_viper:heap:assign_heap    tests/spl/symb_exec_v2/heap.spl       'assign_heap' pass
+symb_exec_viper:heap:assign_heap2    tests/spl/symb_exec_v2/heap.spl      'assign_heap2' pass
+symb_exec_viper:heap:assign_heap3    tests/spl/symb_exec_v2/heap.spl      'assign_heap3' pass
+symb_exec_viper:predicate:incr tests/spl/symb_exec_v2/predicates.spl    'incr'     pass
+symb_exec_viper:predicate:delete tests/spl/symb_exec_v2/predicates.spl  'delete'     pass
+symb_exec_viper:predicate:create tests/spl/symb_exec_v2/predicates.spl  'create'     pass
+symb_exec_viper:predicate:client tests/spl/symb_exec_v2/predicates.spl  'client'     pass
+symb_exec_viper:predicate:incr2 tests/spl/symb_exec_v2/predicates.spl   'incr2'     pass
+symb_exec_viper:predicate:delete2 tests/spl/symb_exec_v2/predicates.spl 'delete2'     pass
+symb_exec_viper:predicate:create2 tests/spl/symb_exec_v2/predicates.spl 'create2'     pass
+symb_exec_viper:predicate:client2 tests/spl/symb_exec_v2/predicates.spl 'client2'     pass
+symb_exec_viper:list:unfold_lseg   tests/spl/symb_exec_v2/list.spl      'unfold_lseg'  pass
+symb_exec_viper:list:fold_left     tests/spl/symb_exec_v2/list.spl      'fold_left'    pass
+symb_exec_viper:list:fold_left_no_data tests/spl/symb_exec_v2/list.spl  'fold_left_no_data'    fail 
+symb_exec_viper:list:fold_right tests/spl/symb_exec_v2/list.spl     'fold_right'   fail 
+symb_exec_viper:list:empty_list tests/spl/symb_exec_v2/list.spl     'empty_list'   pass 
+symb_exec_viper:list:delete tests/spl/symb_exec_v2/list.spl         'delete'   pass 
+symb_exec_viper:list:append tests/spl/symb_exec_v2/list.spl         'append'   pass 
+symb_exec_viper:list:append_len tests/spl/symb_exec_v2/list.spl     'append_len'  fail 
+symb_exec_viper:list:append_loop tests/spl/symb_exec_v2/list.spl    'append_loop' pass 
+symb_exec_viper:list:remove_first tests/spl/symb_exec_v2/list.spl   'remove_first' pass 
+symb_exec_viper:list:test_frame tests/spl/symb_exec_v2/list.spl     'test_frame' pass 
+symb_exec_viper:list:reverse tests/spl/symb_exec_v2/list.spl        'reverse' pass 
+symb_exec_viper:list:concat tests/spl/symb_exec_v2/list.spl         'concat' fail 
+symb_exec_viper:tree:traverse tests/spl/symb_exec_v2/treeset.spl    'traverse'     pass
+symb_exec_viper:tree:insert tests/spl/symb_exec_v2/treeset.spl      'insert'       pass
+symb_exec_viper:tree:rotate_left tests/spl/symb_exec_v2/treeset.spl 'rotate_left'  pass
+symb_exec_viper:tree:rotate_left tests/spl/symb_exec_v2/treeset.spl 'rotate_right' pass
+symb_exec_viper:unfolding:p tests/spl/symb_exec_v2/unfolding.spl    'P'     pass
+symb_exec_viper:unfolding:p tests/spl/symb_exec_v2/unfolding.spl    'P1'    pass
+symb_exec_viper:unfolding:p tests/spl/symb_exec_v2/state_consolidation.spl  'alias1'    pass
+symb_exec_viper:unfolding:p tests/spl/symb_exec_v2/state_consolidation.spl  'alias2'    pass
+symb_exec_viper:unfolding:p tests/spl/symb_exec_v2/state_consolidation.spl  'alias3'    pass
+"
+
+res=0
+SECONDS=0 # Using simpler timing logic for the entire script since individual tests are timed
+
+OPTIONS="$@" ./bin/run-tests $SYMB_EXEC_VIPER_TESTS || res=$?
+
+duration=$SECONDS
+if [ $res -ne 0 ]; then
+    echo -e "\n\033[31mThere were failing test cases!\033[0m"
+fi
+echo -e "Regression tests done. Elapsed time: $(($duration / 60))m $(($duration % 60))s"
+exit $res
