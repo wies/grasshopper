@@ -38,29 +38,24 @@ output:
   SAT { Sat }
 | UNSAT { Unsat }
 | UNKNOWN { Unknown }
-| rmodel { Model $1 }
-| rcore  { UnsatCore $1 }
-| rerror { Error $1 }
+| rcore_or_model  { $1 }
 | error { ProgError.syntax_error (mk_position 1 1) None }
 ;
     
-rerror:
-| LPAREN ERROR STRING RPAREN { $3 }
-;
-
-rmodel:
-| LPAREN MODEL cmnd_list_opt RPAREN { $3 }
-;
-
 names:
 | IDENT names { (Grass.string_of_ident $1) :: $2 }
 | /* empty */ { [] }
 ;
 
-rcore:
-| LPAREN names RPAREN { $2 }
+rcore_or_model:
+| LPAREN names_or_model RPAREN { $2 }
 ;
 
+names_or_model:
+| names { UnsatCore $1 }
+| MODEL cmnd_list_opt { Model $2 }
+| ERROR STRING { Error $2 }
+    
 cmnd:
 | DECLARE_SORT IDENT INT { 
   mk_declare_sort ~pos:(mk_position 1 3) $2 $3 
